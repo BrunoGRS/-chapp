@@ -1,5 +1,7 @@
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   StyleSheet,
   Text,
@@ -12,20 +14,30 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Função para validar o login
+  const handleLogin = () => {
+    if (email === "" || password === "") {
+      Alert.alert("Erro", "Por favor, preencha todos os campos!");
+      return;
+    }
+    // Simulação de log
+    console.log("Tentando logar com:", email);
+    // Navega para a Home e remove a tela de login do histórico
+    router.replace("./home");
+  };
+
   return (
     <View style={styles.container}>
-      {/* Logo e Título */}
+      {/* Escudo da Chapecoense */}
       <View style={styles.header}>
-        {
-          <Image
-            source={require("../../assets/images/chape_simbolo.jpg")}
-            style={styles.logo}
-          />
-        }
+        <Image
+          source={require("../../assets/images/chape_simbolo.jpg")}
+          style={styles.logo}
+        />
         <Text style={styles.title}>CHApp</Text>
       </View>
 
-      {/* Inputs */}
+      {/* Campos de Entrada */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -33,6 +45,7 @@ export default function LoginScreen() {
           placeholderTextColor="#999"
           value={email}
           onChangeText={setEmail}
+          autoCapitalize="none"
         />
         <TextInput
           style={styles.input}
@@ -47,18 +60,20 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Botões Principais */}
+      {/* Botões Entrar e Criar Conta */}
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.primaryButton}>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
           <Text style={styles.buttonText}>Entrar</Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.secondaryButton}>
           <Text style={styles.buttonText}>Criar uma Conta</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Divisor e Login Social */}
       <View style={styles.divider} />
+
+      {/* Login Social Google */}
       <TouchableOpacity style={styles.googleButton}>
         <Image
           source={require("../../assets/images/logoGoole.png")}
@@ -73,7 +88,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1B552A",
+    backgroundColor: "#00421a", // Verde oficial
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
@@ -82,11 +97,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 40,
   },
-  logoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#fff",
+  logo: {
+    width: 150,
+    height: 150,
+    resizeMode: "contain",
     marginBottom: 10,
   },
   title: {
@@ -104,6 +118,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 15,
     marginBottom: 15,
+    fontSize: 16,
+    color: "#000",
   },
   forgotText: {
     color: "#ccc",
@@ -118,7 +134,6 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: "#fff",
     paddingVertical: 12,
-    paddingHorizontal: 30,
     borderRadius: 25,
     width: "48%",
     alignItems: "center",
@@ -126,7 +141,6 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: "#fff",
     paddingVertical: 12,
-    paddingHorizontal: 20,
     borderRadius: 25,
     width: "48%",
     alignItems: "center",
@@ -138,7 +152,7 @@ const styles = StyleSheet.create({
   divider: {
     width: "100%",
     height: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.3)",
     marginBottom: 20,
   },
   googleButton: {
@@ -146,26 +160,18 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 50,
     borderRadius: 8,
-    flexDirection: "row", // Coloca ícone e texto na mesma linha
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 20,
-  },
-  googleButtonText: {
-    color: "#000",
-    fontWeight: "bold",
-    fontSize: 16,
   },
   googleIcon: {
     width: 24,
     height: 24,
-    marginRight: 10, // Espaço entre o G e o texto
+    marginRight: 10,
     resizeMode: "contain",
   },
-  logo: {
-    width: 120, // Largura da imagem
-    height: 120, // Altura da imagem
-    marginBottom: 10,
-    resizeMode: "contain", // Garante que a imagem não seja cortada
+  googleButtonText: {
+    fontWeight: "bold",
+    color: "#000",
   },
 });
