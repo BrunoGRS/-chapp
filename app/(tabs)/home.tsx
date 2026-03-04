@@ -5,15 +5,12 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace("/")}>
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
+
       <Text style={styles.title}>Vamo, Vamo, Chape!</Text>
       <Text style={styles.subtitle}>Bem-vindo ao app oficial do torcedor.</Text>
-
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={() => router.replace("/")}
-      >
-        <Text style={styles.logoutText}>Sair</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -25,6 +22,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  logoutButton: {
+    position: "absolute",
+    top: 56,
+    right: 20,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  logoutText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
   title: {
     fontSize: 28,
     color: "#fff",
@@ -34,14 +49,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#eee",
     marginTop: 10,
-  },
-  logoutButton: {
-    marginTop: 50,
-    padding: 15,
-  },
-  logoutText: {
-    color: "#ff4444",
-    fontWeight: "bold",
-    textDecorationLine: "underline",
   },
 });
