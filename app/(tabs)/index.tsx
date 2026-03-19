@@ -1,7 +1,7 @@
-import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Image,
   StyleSheet,
   Text,
@@ -10,20 +10,46 @@ import {
   View,
 } from "react-native";
 
+import { useAuth } from "@/contexts/auth-context";
+
 export default function LoginScreen() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const { signIn, signUp } = useAuth();
 
-  // Função para validar o login
-  const handleLogin = () => {
+  const isRegisterMode = mode === "register";
+
+  const handleSubmit = async () => {
     if (email === "" || password === "") {
       Alert.alert("Erro", "Por favor, preencha todos os campos!");
       return;
     }
-    // Simulação de log
-    console.log("Tentando logar com:", email);
-    // Navega para a Home e remove a tela de login do histórico
-    router.replace("./home");
+
+    if (isRegisterMode && name.trim() === "") {
+      Alert.alert("Erro", "Informe seu nome para criar a conta.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      if (isRegisterMode) {
+        await signUp({ name: name.trim(), email: email.trim(), password });
+      } else {
+        await signIn({ email: email.trim(), password });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao autenticar";
+      Alert.alert(isRegisterMode ? "Erro no cadastro" : "Erro no login", message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleMode = () => {
+    setMode((currentMode) => (currentMode === "login" ? "register" : "login"));
   };
 
   return (
@@ -39,6 +65,15 @@ export default function LoginScreen() {
 
       {/* Campos de Entrada */}
       <View style={styles.inputContainer}>
+        {isRegisterMode ? (
+          <TextInput
+            style={styles.input}
+            placeholder="Nome completo"
+            placeholderTextColor="#999"
+            value={name}
+            onChangeText={setName}
+          />
+        ) : null}
         <TextInput
           style={styles.input}
           placeholder="Usuário/Email"
@@ -55,26 +90,32 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
         />
-        <TouchableOpacity>
-          <Text style={styles.forgotText}>Esqueci minha senha</Text>
-        </TouchableOpacity>
+        {!isRegisterMode ? (
+          <TouchableOpacity>
+            <Text style={styles.forgotText}>Esqueci minha senha</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Botões Entrar e Criar Conta */}
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Entrar</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator size="small" color="#000" />
+          ) : (
+            <Text style={styles.buttonText}>{isRegisterMode ? "Cadastrar" : "Entrar"}</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.secondaryButton}>
-          <Text style={styles.buttonText}>Criar uma Conta</Text>
+        <TouchableOpacity style={styles.secondaryButton} disabled={loading} onPress={toggleMode}>
+          <Text style={styles.buttonText}>{isRegisterMode ? "Voltar ao Login" : "Criar uma Conta"}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.divider} />
 
       {/* Login Social Google */}
-      <TouchableOpacity style={styles.googleButton}>
+      <TouchableOpacity style={styles.googleButton} disabled={loading}>
         <Image
           source={require("../../assets/images/logoGoole.png")}
           style={styles.googleIcon}

@@ -1,11 +1,14 @@
-import { router } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+import { useAuth } from "@/contexts/auth-context";
+
 export default function HomeScreen() {
+  const { signOut } = useAuth();
+
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace("/")}>
+      <TouchableOpacity style={styles.logoutButton} onPress={() => void signOut()}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
 

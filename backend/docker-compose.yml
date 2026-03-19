@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: chapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - chapp_pg_data:/var/lib/postgresql/data
+
+volumes:
+  chapp_pg_data:

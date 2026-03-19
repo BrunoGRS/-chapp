@@ -100,7 +100,7 @@ export default function HistoriaScreen() {
           </View>
 
           <Text style={styles.footerQuote}>
-            \"Que a nossa história jamais seja esquecida.\"
+            &quot;Que a nossa história jamais seja esquecida.&quot;
           </Text>
         </ScrollView>
       </ImageBackground>
