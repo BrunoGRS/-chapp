@@ -1,50 +1,151 @@
-# Welcome to your Expo app 👋
+# CHApp
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo mobile da Chapecoense construído com Expo/React Native, com backend Node.js para autenticação.
 
-## Get started
+## Status atual
 
-1. Install dependencies
+- `login` funcionando com API real
+- `cadastro` funcionando com API real
+- sessão persistida com `expo-secure-store`
+- backend com `PostgreSQL + Prisma + JWT`
+- telas `jogos`, `titulos`, `historia` e `carteirinha` ainda usam dados mockados
 
-   ```bash
-   npm install
-   ```
+## Estrutura
 
-2. Start the app
+- `app/`: app mobile com `expo-router`
+- `backend/`: API de autenticação
+- `docs/PLANO_FINALIZACAO.md`: roadmap e pendências do projeto
 
-   ```bash
-   npx expo start
-   ```
+## Requisitos
 
-In the output, you'll find options to open the app in a
+- Node 20+
+- npm
+- Docker
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Setup do backend
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+1. Entre em `backend/`
+2. Copie `backend/.env.example` para `backend/.env`
+3. Gere um `JWT_SECRET` forte:
 
 ```bash
-npm run reset-project
+openssl rand -hex 32
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+4. Coloque o valor em `backend/.env`
+5. Suba o banco:
 
-## Learn more
+```bash
+cd backend
+docker compose up -d
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+6. Instale dependências e prepare o Prisma:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm install
+npm run prisma:generate
+npm run prisma:push
+```
 
-## Join the community
+7. Inicie a API:
 
-Join our community of developers creating universal apps.
+```bash
+npm run dev
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+API local padrão:
+
+```txt
+http://localhost:3333
+```
+
+## Setup do app
+
+1. Na raiz do projeto, copie `.env.example` para `.env`
+2. Ajuste `EXPO_PUBLIC_API_BASE_URL` conforme o ambiente de teste
+3. Instale dependências:
+
+```bash
+npm install
+```
+
+4. Inicie o app:
+
+```bash
+npm start
+```
+
+## URL da API por ambiente
+
+Use `EXPO_PUBLIC_API_BASE_URL` conforme onde o app estiver rodando:
+
+- Web no mesmo computador:
+  - `http://localhost:3333`
+- Android Emulator:
+  - `http://10.0.2.2:3333`
+- iOS Simulator:
+  - `http://localhost:3333`
+- Expo Go no celular:
+  - `http://IP_DA_SUA_MAQUINA:3333`
+  - exemplo: `http://192.168.2.19:3333`
+
+Exemplo de `.env` na raiz:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.2.19:3333
+EXPO_PUBLIC_AUTH_LOGIN_PATH=/auth/login
+EXPO_PUBLIC_AUTH_REGISTER_PATH=/auth/register
+```
+
+## Como testar autenticação
+
+Com backend rodando, você pode criar usuário pela API:
+
+```bash
+curl -X POST http://localhost:3333/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Teste","email":"teste@chapp.com","password":"123456"}'
+```
+
+Ou criar direto pela interface do app em `Criar uma Conta`.
+
+Login de teste:
+
+```txt
+email: teste@chapp.com
+senha: 123456
+```
+
+## Endpoints atuais
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `GET /health`
+
+## Comandos úteis
+
+Na raiz do app:
+
+```bash
+npm start
+npm run android
+npm run ios
+npm run web
+npm run lint
+```
+
+No backend:
+
+```bash
+npm run dev
+npm run build
+npm run prisma:generate
+npm run prisma:push
+```
+
+## Documentação complementar
+
+- [Plano de Finalização](/home/wilian/Documents/-chapp/docs/PLANO_FINALIZACAO.md)
+- [README do Backend](/home/wilian/Documents/-chapp/backend/README.md)
