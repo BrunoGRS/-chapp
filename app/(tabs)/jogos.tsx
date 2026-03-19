@@ -1,30 +1,53 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React from "react";
-import { Image, ImageBackground, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  ImageBackground,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-type Standing = {
-  position: number;
-  team: string;
-  points: number;
-  games: number;
-  form: "up" | "down" | "stable";
-};
-
-const standings: Standing[] = [
-  { position: 1, team: "Palmeiras", points: 7, games: 3, form: "up" },
-  { position: 2, team: "Sao Paulo", points: 7, games: 3, form: "up" },
-  { position: 3, team: "Fluminense", points: 7, games: 3, form: "up" },
-  { position: 4, team: "Bahia", points: 7, games: 3, form: "up" },
-  { position: 5, team: "Athletico-PR", points: 6, games: 3, form: "up" },
-  { position: 6, team: "Bragantino", points: 6, games: 3, form: "down" },
-  { position: 7, team: "Chapecoense", points: 5, games: 3, form: "up" },
-  { position: 8, team: "Mirassol", points: 5, games: 3, form: "down" },
-  { position: 9, team: "Coritiba", points: 4, games: 3, form: "stable" },
-  { position: 10, team: "Flamengo", points: 4, games: 3, form: "down" },
-];
+import { useAuth } from "@/contexts/auth-context";
+import { getJogosOverview } from "@/services/jogos.service";
+import type { JogosOverview, StandingForm } from "@/types/jogos";
 
 export default function JogosScreen() {
-  const renderFormIcon = (form: Standing["form"]) => {
+  const { user } = useAuth();
+  const [data, setData] = useState<JogosOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadJogos();
+  }, []);
+
+  async function loadJogos(showRefreshing = false) {
+    try {
+      if (showRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setErrorMessage(null);
+      const response = await getJogosOverview();
+      setData(response);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao carregar jogos";
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  function renderFormIcon(form: StandingForm) {
     if (form === "up") {
       return <MaterialIcons name="arrow-drop-up" size={16} color="#5fae66" />;
     }
@@ -32,7 +55,10 @@ export default function JogosScreen() {
       return <MaterialIcons name="arrow-drop-down" size={16} color="#dc6d6d" />;
     }
     return <MaterialIcons name="remove" size={14} color="#9aa39a" />;
-  };
+  }
+
+  const featuredMatches = data?.featuredMatches ?? [];
+  const standings = data?.standings ?? [];
 
   return (
     <View style={styles.root}>
@@ -43,69 +69,93 @@ export default function JogosScreen() {
         imageStyle={styles.backgroundImage}
       >
         <View style={styles.overlay} />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void loadJogos(true)} tintColor="#f5f5f0" />
+          }
+        >
           <View style={styles.headerBar}>
             <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.avatar} />
-            <Text style={styles.profileName}>Bruno</Text>
+            <Text style={styles.profileName}>{user?.name ?? "Torcedor"}</Text>
           </View>
 
-          <View style={styles.scoresRow}>
-            <View style={styles.scoreCard}>
-              <View style={styles.teamBlock}>
-                <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.teamLogo} />
-                <Text style={styles.scoreNumber}>4</Text>
-              </View>
-              <Text style={styles.scoreDivider}>x</Text>
-              <View style={styles.teamBlock}>
-                <MaterialIcons name="sports-soccer" size={22} color="#121212" />
-                <Text style={styles.scoreNumber}>2</Text>
-              </View>
+          {loading ? (
+            <View style={styles.feedbackCard}>
+              <ActivityIndicator size="large" color="#f5f5f0" />
+              <Text style={styles.feedbackText}>Carregando jogos e classificacao...</Text>
             </View>
+          ) : null}
 
-            <View style={styles.scoreCard}>
-              <View style={styles.teamBlock}>
-                <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.teamLogo} />
-                <Text style={styles.scoreNumber}>3</Text>
-              </View>
-              <Text style={styles.scoreDivider}>x</Text>
-              <View style={styles.teamBlock}>
-                <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.teamLogo} />
-                <Text style={styles.scoreNumber}>3</Text>
-              </View>
+          {!loading && errorMessage ? (
+            <View style={styles.feedbackCard}>
+              <MaterialIcons name="wifi-off" size={30} color="#f5f5f0" />
+              <Text style={styles.feedbackText}>{errorMessage}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => void loadJogos()}>
+                <Text style={styles.retryText}>Tentar novamente</Text>
+              </TouchableOpacity>
             </View>
-          </View>
+          ) : null}
 
-          <View style={styles.dotRow}>
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
-
-          <View style={styles.tableHeader}>
-            <Text style={styles.tableTitle}>Serie A</Text>
-            <MaterialIcons name="arrow-forward" size={18} color="#f5f5f0" />
-          </View>
-
-          <View style={styles.tableCard}>
-            <View style={styles.tableTopRow}>
-              <Text style={[styles.tableTopText, styles.colTeam]}>Classificacao</Text>
-              <Text style={[styles.tableTopText, styles.colPts]}>P</Text>
-              <Text style={[styles.tableTopText, styles.colGames]}>J</Text>
-            </View>
-
-            {standings.map((item) => (
-              <View
-                key={`${item.position}-${item.team}`}
-                style={[styles.row, item.team === "Chapecoense" && styles.rowHighlight]}
-              >
-                <Text style={styles.position}>{item.position}</Text>
-                <Text style={styles.team}>{item.team}</Text>
-                {renderFormIcon(item.form)}
-                <Text style={styles.points}>{item.points}</Text>
-                <Text style={styles.games}>{item.games}</Text>
+          {!loading && !errorMessage ? (
+            <>
+              <View style={styles.scoresRow}>
+                {featuredMatches.map((match) => (
+                  <View key={match.id} style={styles.scoreCard}>
+                    <View style={styles.matchMeta}>
+                      <Text style={styles.matchStatus}>{match.status}</Text>
+                      <Text style={styles.matchTime}>{match.matchTime}</Text>
+                    </View>
+                    <View style={styles.scoreLine}>
+                      <View style={styles.teamBlock}>
+                        <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.teamLogo} />
+                        <Text style={styles.teamName}>{match.homeTeam}</Text>
+                      </View>
+                      <Text style={styles.scoreNumber}>{match.homeScore}</Text>
+                      <Text style={styles.scoreDivider}>x</Text>
+                      <Text style={styles.scoreNumber}>{match.awayScore}</Text>
+                      <View style={styles.teamBlock}>
+                        <Text style={styles.teamName}>{match.awayTeam}</Text>
+                        <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.teamLogo} />
+                      </View>
+                    </View>
+                    <Text style={styles.venueText}>{match.venue}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableTitle}>{data?.competition ?? "Campeonato"}</Text>
+                <MaterialIcons name="arrow-forward" size={18} color="#f5f5f0" />
+              </View>
+
+              <Text style={styles.updatedAt}>
+                Atualizado em {new Date(data?.updatedAt ?? "").toLocaleString("pt-BR")}
+              </Text>
+
+              <View style={styles.tableCard}>
+                <View style={styles.tableTopRow}>
+                  <Text style={[styles.tableTopText, styles.colTeam]}>Classificacao</Text>
+                  <Text style={[styles.tableTopText, styles.colPts]}>P</Text>
+                  <Text style={[styles.tableTopText, styles.colGames]}>J</Text>
+                </View>
+
+                {standings.map((item) => (
+                  <View
+                    key={`${item.position}-${item.team}`}
+                    style={[styles.row, item.team === "Chapecoense" && styles.rowHighlight]}
+                  >
+                    <Text style={styles.position}>{item.position}</Text>
+                    <Text style={styles.team}>{item.team}</Text>
+                    {renderFormIcon(item.form)}
+                    <Text style={styles.points}>{item.points}</Text>
+                    <Text style={styles.games}>{item.games}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
         </ScrollView>
       </ImageBackground>
     </View>
@@ -153,27 +203,72 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#14381f",
   },
+  feedbackCard: {
+    marginTop: 44,
+    marginHorizontal: 24,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    gap: 12,
+  },
+  feedbackText: {
+    color: "#f5f5f0",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 8,
+    backgroundColor: "#f5f5f0",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: "#14381f",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
   scoresRow: {
-    marginTop: 78,
+    marginTop: 32,
     paddingHorizontal: 24,
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "center",
+    gap: 12,
   },
   scoreCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.97)",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  matchMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  matchStatus: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0c5a2a",
+    textTransform: "uppercase",
+  },
+  matchTime: {
+    fontSize: 11,
+    color: "#566056",
+  },
+  scoreLine: {
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.97)",
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    justifyContent: "space-between",
     gap: 6,
-    minWidth: 98,
   },
   teamBlock: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
   },
   teamLogo: {
     width: 24,
@@ -182,34 +277,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#d4ddd2",
   },
+  teamName: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#253225",
+  },
   scoreNumber: {
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: "800",
     color: "#202420",
-    lineHeight: 36,
+    lineHeight: 34,
   },
   scoreDivider: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: "#566056",
   },
-  dotRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(215, 223, 213, 0.4)",
-  },
-  dotActive: {
-    backgroundColor: "#a7b8a6",
+  venueText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: "#566056",
   },
   tableHeader: {
-    marginTop: 18,
+    marginTop: 24,
     paddingHorizontal: 40,
     flexDirection: "row",
     alignItems: "center",
@@ -219,6 +310,12 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: "700",
     color: "#f5f5f0",
+  },
+  updatedAt: {
+    marginTop: 6,
+    paddingHorizontal: 40,
+    color: "#cfe0d0",
+    fontSize: 11,
   },
   tableCard: {
     marginTop: 10,

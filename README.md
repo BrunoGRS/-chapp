@@ -8,7 +8,10 @@ Aplicativo mobile da Chapecoense construído com Expo/React Native, com backend 
 - `cadastro` funcionando com API real
 - sessão persistida com `expo-secure-store`
 - backend com `PostgreSQL + Prisma + JWT`
-- telas `jogos`, `titulos`, `historia` e `carteirinha` ainda usam dados mockados
+- tela `jogos` integrada com API local
+- tela `titulos` integrada com API local
+- tela `historia` integrada com API local
+- tela `carteirinha` integrada com API local
 
 ## Estrutura
 
@@ -122,6 +125,10 @@ senha: 123456
 - `POST /auth/register`
 - `POST /auth/login`
 - `GET /auth/me`
+- `GET /jogos/overview`
+- `GET /titulos/overview`
+- `GET /historia/overview`
+- `GET /carteirinha/overview`
 - `GET /health`
 
 ## Comandos úteis

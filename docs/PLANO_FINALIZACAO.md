@@ -19,7 +19,7 @@ Entregue nesta etapa:
 
 Pendente principal agora:
 
-- Integrar as telas `jogos`, `titulos`, `historia` e `carteirinha` com dados reais da API.
+- Definir fonte oficial e regras finais da carteirinha para substituir o payload local inicial da API.
 
 ## 1. Situação atual (estado do projeto)
 
@@ -28,10 +28,10 @@ O app está com a parte visual bem avançada, porém a maior parte dos dados ain
 Principais pontos encontrados:
 
 - Login agora está ligado à camada de autenticação (`AuthContext`) e pronto para API real.
-- Tela de jogos com classificação e placares mockados: `app/(tabs)/jogos.tsx`.
-- Tela de títulos com carrossel e dados mockados: `app/(tabs)/titulos.tsx`.
-- Tela de história com timeline e conquistas mockadas: `app/(tabs)/historia.tsx`.
-- Tela de carteirinha virtual com dados e QR estáticos: `app/(tabs)/carteirinha.tsx`.
+- Tela de jogos integrada à API local com `loading`, `erro` e `refresh`: `app/(tabs)/jogos.tsx`.
+- Tela de títulos integrada à API local com `loading`, `erro` e `refresh`: `app/(tabs)/titulos.tsx`.
+- Tela de história integrada à API local com `loading`, `erro` e `refresh`: `app/(tabs)/historia.tsx`.
+- Tela de carteirinha integrada à API local com `loading`, `erro`, `refresh` e ações de exportar/copiar/remover: `app/(tabs)/carteirinha.tsx`.
 - Backend base já existe em `backend/README.md`.
 
 ## 2. Problemas técnicos já detectados
@@ -39,8 +39,7 @@ Principais pontos encontrados:
 - `lint` do app está verde após correção em `historia.tsx`.
 - Inconsistência de acentuação/texto em várias telas (`Socio`, `Associacao`, `Furacao`, `Serie A`, etc.).
 - Mesma imagem usada para escudo/avatar/foto do sócio em todas as telas (sem separação de assets por contexto).
-- Telas de conteúdo ainda em mock (faltam serviços de `jogos`, `titulos`, `historia`, `carteirinha`).
-- Ainda falta definir/confirmar fonte oficial dos dados esportivos e da carteirinha.
+- Ainda falta definir/confirmar fonte oficial dos dados da carteirinha.
 
 ## 3. O que precisa implementar para funcionar de ponta a ponta
 
@@ -106,6 +105,10 @@ Plano recomendado:
 - `POST /auth/register`
 - `POST /auth/login`
 - `GET /auth/me`
+- `GET /jogos/overview`
+- `GET /titulos/overview`
+- `GET /historia/overview`
+- `GET /carteirinha/overview`
 - `GET /health`
 - PostgreSQL + Prisma + JWT configurados no diretório `backend/`
 
@@ -165,14 +168,14 @@ Fase 1 (infra mínima):
 4. Integrar cadastro do app ao backend. `CONCLUÍDO`
 
 Fase 2 (dados vivos):
-1. Integrar jogos.
-2. Integrar títulos.
-3. Integrar história por conteúdo remoto.
+1. Integrar jogos. `CONCLUÍDO`
+2. Integrar títulos. `CONCLUÍDO`
+3. Integrar história por conteúdo remoto. `CONCLUÍDO`
 
 Fase 3 (carteirinha):
-1. Endpoint de carteirinha + QR dinâmico.
-2. Exportação e ações.
-3. Regras de expiração/renovação e mensagens de status.
+1. Endpoint de carteirinha + QR dinâmico. `CONCLUÍDO`
+2. Exportação e ações. `CONCLUÍDO`
+3. Regras de expiração/renovação e mensagens de status. `PENDENTE`
 
 Fase 4 (qualidade para release):
 1. Testes (unitários + integração básica).
@@ -185,13 +188,13 @@ O app pode ser considerado funcional para produção quando:
 
 1. Login real com sessão persistida estiver estável.
 2. Jogos, títulos e história forem carregados de fonte remota.
-3. Carteirinha virtual mostrar dados reais do sócio + QR válido.
+3. Carteirinha virtual mostrar dados do sócio + QR válido conforme regra oficial.
 4. Todas as telas tiverem `loading/empty/error`.
 5. Lint e build em CI estiverem verdes.
 
 ## 6. Riscos e decisões pendentes
 
-1. Dependência de API oficial de sócio/carteirinha (maior risco).
+1. Dependência de API oficial de sócio/carteirinha e regra final de validade (maior risco).
 2. Origem oficial dos dados de jogos/classificação e limites de uso.
 3. Governança de conteúdo da história (quem atualiza e aprova).
 4. Regras de segurança/LGPD para dados pessoais do torcedor.
@@ -201,4 +204,4 @@ O app pode ser considerado funcional para produção quando:
 1. Subir backend local (`backend/docker-compose.yml` + Prisma).
 2. Criar usuário de teste (`POST /auth/register`).
 3. Apontar app para o `EXPO_PUBLIC_API_BASE_URL` correto conforme ambiente de teste.
-4. Começar Fase 2 com integração da tela `jogos`.
+4. Refinar regras oficiais da `carteirinha` e iniciar testes de fluxo completo.

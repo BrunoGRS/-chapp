@@ -1,48 +1,52 @@
-import React from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   ImageBackground,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
-const timeline = [
-  {
-    year: "1973",
-    title: "Fundação",
-    description:
-      "A Chapecoense nasce da união de clubes da cidade e inicia sua história no futebol catarinense.",
-  },
-  {
-    year: "2009",
-    title: "Acesso à Série A",
-    description:
-      "Após uma trajetória de crescimento, o clube chega à elite do futebol brasileiro.",
-  },
-  {
-    year: "2016",
-    title: "Final da Sul-Americana",
-    description:
-      "Campanha histórica que marcou o Brasil e o mundo do futebol.",
-  },
-  {
-    year: "2017",
-    title: "Reconstrução e Título",
-    description:
-      "Recomeço com força, homenagens e conquistas que simbolizam a superação.",
-  },
-];
-
-const trophies = [
-  { label: "Campeonato Catarinense", value: "8x" },
-  { label: "Copa Sul-Americana", value: "1x" },
-  { label: "Brasileiro 2013", value: "1x" },
-  { label: "Brasileiro Série B", value: "1x" },
-];
+import { useAuth } from "@/contexts/auth-context";
+import { getHistoriaOverview } from "@/services/historia.service";
+import type { HistoriaOverview } from "@/types/historia";
 
 export default function HistoriaScreen() {
+  const { user } = useAuth();
+  const [data, setData] = useState<HistoriaOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadHistoria();
+  }, []);
+
+  async function loadHistoria(showRefreshing = false) {
+    try {
+      if (showRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setErrorMessage(null);
+      const response = await getHistoriaOverview();
+      setData(response);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao carregar historia";
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
   return (
     <View style={styles.root}>
       <ImageBackground
@@ -52,14 +56,19 @@ export default function HistoriaScreen() {
         imageStyle={styles.backgroundImage}
       >
         <View style={styles.overlay} />
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void loadHistoria(true)} tintColor="#f5f5f0" />
+          }
+        >
           <View style={styles.header}>
-            <View style={styles.profile}> 
+            <View style={styles.profile}>
               <Image
                 source={require("../../assets/images/chape_simbolo.jpg")}
                 style={styles.avatar}
               />
-              <Text style={styles.profileName}>Bruno</Text>
+              <Text style={styles.profileName}>{user?.name ?? "Torcedor"}</Text>
             </View>
           </View>
 
@@ -68,40 +77,66 @@ export default function HistoriaScreen() {
               source={require("../../assets/images/chape_simbolo.jpg")}
               style={styles.crest}
             />
-            <Text style={styles.clubName}>Associação Chapecoense de Futebol</Text>
-            <Text style={styles.clubSubtitle}>Fundada em 10 de maio de 1973</Text>
-            <Text style={styles.clubCity}>Chapecó - SC</Text>
+            <Text style={styles.clubName}>{data?.clubName ?? "Associacao Chapecoense de Futebol"}</Text>
+            <Text style={styles.clubSubtitle}>Fundada em {data?.foundedAt ?? "-"}</Text>
+            <Text style={styles.clubCity}>{data?.city ?? "-"}</Text>
+            {data?.updatedAt ? (
+              <Text style={styles.updatedAt}>
+                Atualizado em {new Date(data.updatedAt).toLocaleString("pt-BR")}
+              </Text>
+            ) : null}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Linha do tempo</Text>
-            <View style={styles.timelineList}>
-              {timeline.map((item) => (
-                <View key={item.year} style={styles.timelineItem}>
-                  <View style={styles.timelineDot} />
-                  <Text style={styles.timelineYear}>{item.year}</Text>
-                  <Text style={styles.timelineTitle}>{item.title}</Text>
-                  <Text style={styles.timelineDesc}>{item.description}</Text>
-                </View>
-              ))}
+          {loading ? (
+            <View style={styles.feedbackCard}>
+              <ActivityIndicator size="large" color="#f5f5f0" />
+              <Text style={styles.feedbackText}>Carregando historia...</Text>
             </View>
-          </View>
+          ) : null}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Conquistas</Text>
-            <View style={styles.trophies}>
-              {trophies.map((trophy) => (
-                <View key={trophy.label} style={styles.trophyCard}>
-                  <Text style={styles.trophyValue}>{trophy.value}</Text>
-                  <Text style={styles.trophyLabel}>{trophy.label}</Text>
-                </View>
-              ))}
+          {!loading && errorMessage ? (
+            <View style={styles.feedbackCard}>
+              <MaterialIcons name="wifi-off" size={30} color="#f5f5f0" />
+              <Text style={styles.feedbackText}>{errorMessage}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => void loadHistoria()}>
+                <Text style={styles.retryText}>Tentar novamente</Text>
+              </TouchableOpacity>
             </View>
-          </View>
+          ) : null}
 
-          <Text style={styles.footerQuote}>
-            &quot;Que a nossa história jamais seja esquecida.&quot;
-          </Text>
+          {!loading && !errorMessage ? (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Linha do tempo</Text>
+                <View style={styles.timelineList}>
+                  {data?.timeline.map((item) => (
+                    <View key={`${item.year}-${item.title}`} style={styles.timelineItem}>
+                      <View style={styles.timelineDot} />
+                      <Text style={styles.timelineYear}>{item.year}</Text>
+                      <Text style={styles.timelineTitle}>{item.title}</Text>
+                      <Text style={styles.timelineDesc}>{item.description}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Conquistas</Text>
+                <View style={styles.trophies}>
+                  {data?.achievements.map((achievement) => (
+                    <View key={achievement.label} style={styles.trophyCard}>
+                      <Text style={styles.trophyValue}>{achievement.value}</Text>
+                      <Text style={styles.trophyLabel}>{achievement.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <Text style={styles.footerQuote}>
+                &quot;{data?.footerQuote ?? "Que a nossa historia jamais seja esquecida."}&quot;
+              </Text>
+            </>
+          ) : null}
         </ScrollView>
       </ImageBackground>
     </View>
@@ -177,6 +212,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#b9d1be",
     marginTop: 2,
+  },
+  updatedAt: {
+    marginTop: 8,
+    color: "#cfe0d0",
+    fontSize: 11,
+  },
+  feedbackCard: {
+    marginTop: 22,
+    marginHorizontal: 24,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    gap: 12,
+  },
+  feedbackText: {
+    color: "#f5f5f0",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 8,
+    backgroundColor: "#f5f5f0",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: "#14381f",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
   section: {
     marginTop: 28,

@@ -7,6 +7,10 @@ Backend inicial para autenticação com PostgreSQL + Prisma + JWT.
 - `POST /auth/register`
 - `POST /auth/login`
 - `GET /auth/me` (Bearer token)
+- `GET /jogos/overview` (Bearer token)
+- `GET /titulos/overview` (Bearer token)
+- `GET /historia/overview` (Bearer token)
+- `GET /carteirinha/overview` (Bearer token)
 - `GET /health`
 
 ## Requisitos

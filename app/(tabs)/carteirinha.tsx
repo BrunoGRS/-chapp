@@ -1,17 +1,25 @@
+import * as Clipboard from "expo-clipboard";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
   ImageBackground,
   ListRenderItemInfo,
+  RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { getCarteirinhaOverview } from "@/services/carteirinha.service";
+import type { CarteirinhaOverview } from "@/types/carteirinha";
 
 type CardSide = "front" | "qr";
 
@@ -30,19 +38,90 @@ const pageWidth = width - 52;
 
 export default function CarteirinhaScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [data, setData] = useState<CarteirinhaOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRemoved, setIsRemoved] = useState(false);
   const listRef = useRef<FlatList<CardPage>>(null);
 
-  const onMomentumEnd = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+  useEffect(() => {
+    void loadCarteirinha();
+  }, []);
+
+  async function loadCarteirinha(showRefreshing = false) {
+    try {
+      if (showRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setErrorMessage(null);
+      const response = await getCarteirinhaOverview();
+      setData(response);
+      setIsRemoved(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao carregar carteirinha";
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  function onMomentumEnd(event: { nativeEvent: { contentOffset: { x: number } } }) {
     const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
     setCurrentIndex(next);
-  };
+  }
 
-  const goTo = (index: number) => {
+  function goTo(index: number) {
     listRef.current?.scrollToIndex({ index, animated: true });
     setCurrentIndex(index);
-  };
+  }
 
-  const renderCardPage = ({ item }: ListRenderItemInfo<CardPage>) => {
+  async function handleExport() {
+    if (!data) {
+      return;
+    }
+
+    await Share.share({
+      message: [
+        "Carteirinha CHApp",
+        `Nome: ${data.memberName}`,
+        `Matricula: ${data.memberNumber}`,
+        `Plano: ${data.planName}`,
+        `Validade: ${data.validUntil}`,
+        `QR: ${data.qrCode}`,
+      ].join("\n"),
+    });
+  }
+
+  async function handleCopyQrCode() {
+    if (!data) {
+      return;
+    }
+
+    await Clipboard.setStringAsync(data.qrCode);
+    Alert.alert("QR copiado", "O codigo da carteirinha foi copiado para a area de transferencia.");
+  }
+
+  function handleRemoveCard() {
+    Alert.alert("Remover carteirinha", "Deseja remover a carteirinha desta sessao do app?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Remover",
+        style: "destructive",
+        onPress: () => setIsRemoved(true),
+      },
+    ]);
+  }
+
+  function renderCardPage({ item }: ListRenderItemInfo<CardPage>) {
+    if (!data) {
+      return null;
+    }
+
     if (item.side === "front") {
       return (
         <View style={styles.page}>
@@ -50,20 +129,30 @@ export default function CarteirinhaScreen() {
             <View style={styles.cardGradient} />
 
             <View style={styles.frontContent}>
+              <View style={styles.frontTop}>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusText}>{data.status}</Text>
+                </View>
+                <Text style={styles.planText}>{data.planName}</Text>
+              </View>
+
               <View style={styles.frontRow}>
                 <View style={styles.frontColumn}>
                   <Text style={styles.frontLabel}>Nome do Socio</Text>
-                  <Text style={styles.frontValue}>Palloma</Text>
+                  <Text style={styles.frontValue}>{data.memberName}</Text>
 
                   <Text style={[styles.frontLabel, styles.fieldSpacing]}>Matricula</Text>
                   <View style={styles.codeBox}>
-                    <Text style={styles.codeText}>000100</Text>
+                    <Text style={styles.codeText}>{data.memberNumber}</Text>
                   </View>
+
+                  <Text style={[styles.frontLabel, styles.fieldSpacing]}>Validade</Text>
+                  <Text style={styles.frontSmallValue}>{data.validUntil}</Text>
                 </View>
 
                 <View style={styles.clubColumn}>
                   <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.clubLogo} />
-                  <Text style={styles.clubVerticalText}>Associacao Chapecoense de Futebol</Text>
+                  <Text style={styles.clubVerticalText}>{data.clubName}</Text>
                 </View>
               </View>
 
@@ -89,11 +178,14 @@ export default function CarteirinhaScreen() {
             <View style={styles.bigQrBox}>
               <MaterialIcons name="qr-code" size={160} color="#247248" />
             </View>
+            <Text style={styles.qrCodeText}>{data.qrCode}</Text>
           </View>
         </View>
       </View>
     );
-  };
+  }
+
+  const emptyStateVisible = !loading && !errorMessage && isRemoved;
 
   return (
     <View style={styles.root}>
@@ -104,56 +196,101 @@ export default function CarteirinhaScreen() {
         imageStyle={styles.backgroundImage}
       >
         <View style={styles.overlay} />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void loadCarteirinha(true)}
+              tintColor="#f5f5f0"
+            />
+          }
+        >
           <View style={styles.headerBar}>
             <View style={styles.headerIcon}>
-              <MaterialIcons name="chevron-left" size={22} color="#f6f7f5" />
+              <MaterialIcons name="badge" size={18} color="#f6f7f5" />
             </View>
             <View>
               <Text style={styles.headerTitle}>Carteirinha de Socio</Text>
-              <Text style={styles.headerSubtitle}>Atualizado em: 22/02/2026</Text>
+              <Text style={styles.headerSubtitle}>
+                {data?.updatedAt
+                  ? `Atualizado em: ${new Date(data.updatedAt).toLocaleString("pt-BR")}`
+                  : "Atualizando dados da carteirinha"}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.cardArea}>
-            <FlatList
-              ref={listRef}
-              data={pages}
-              horizontal
-              pagingEnabled
-              keyExtractor={(item) => item.id}
-              renderItem={renderCardPage}
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
-              onMomentumScrollEnd={onMomentumEnd}
-            />
-          </View>
+          {loading ? (
+            <View style={styles.feedbackCard}>
+              <ActivityIndicator size="large" color="#f5f5f0" />
+              <Text style={styles.feedbackText}>Carregando carteirinha...</Text>
+            </View>
+          ) : null}
 
-          <View style={styles.dots}>
-            {pages.map((page, index) => (
-              <TouchableOpacity key={page.id} onPress={() => goTo(index)}>
-                <View style={[styles.dot, currentIndex === index && styles.dotActive]} />
+          {!loading && errorMessage ? (
+            <View style={styles.feedbackCard}>
+              <MaterialIcons name="wifi-off" size={30} color="#f5f5f0" />
+              <Text style={styles.feedbackText}>{errorMessage}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => void loadCarteirinha()}>
+                <Text style={styles.retryText}>Tentar novamente</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            </View>
+          ) : null}
 
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialIcons name="description" size={18} color="#355c20" />
-              <Text style={styles.actionText}>Exportar</Text>
-            </TouchableOpacity>
+          {emptyStateVisible ? (
+            <View style={styles.feedbackCard}>
+              <MaterialIcons name="credit-card-off" size={34} color="#f5f5f0" />
+              <Text style={styles.feedbackText}>A carteirinha foi removida desta sessao do app.</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => void loadCarteirinha()}>
+                <Text style={styles.retryText}>Baixar novamente</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialIcons name="content-copy" size={18} color="#355c20" />
-              <Text style={styles.actionText}>Copiar QR Code</Text>
-            </TouchableOpacity>
+          {!loading && !errorMessage && !isRemoved ? (
+            <>
+              <View style={styles.cardArea}>
+                <FlatList
+                  ref={listRef}
+                  data={pages}
+                  horizontal
+                  pagingEnabled
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderCardPage}
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+                  onMomentumScrollEnd={onMomentumEnd}
+                />
+              </View>
 
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialIcons name="delete" size={18} color="#355c20" />
-              <Text style={styles.actionText}>Remover Carteirinha</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.dots}>
+                {pages.map((page, index) => (
+                  <TouchableOpacity key={page.id} onPress={() => goTo(index)}>
+                    <View style={[styles.dot, currentIndex === index && styles.dotActive]} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.actions}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => void handleExport()}>
+                  <MaterialIcons name="description" size={18} color="#355c20" />
+                  <Text style={styles.actionText}>{data?.actions.exportLabel ?? "Exportar"}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionButton} onPress={() => void handleCopyQrCode()}>
+                  <MaterialIcons name="content-copy" size={18} color="#355c20" />
+                  <Text style={styles.actionText}>{data?.actions.copyLabel ?? "Copiar QR Code"}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionButton} onPress={handleRemoveCard}>
+                  <MaterialIcons name="delete" size={18} color="#355c20" />
+                  <Text style={styles.actionText}>{data?.actions.removeLabel ?? "Remover Carteirinha"}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : null}
         </ScrollView>
       </ImageBackground>
     </View>
@@ -207,6 +344,34 @@ const styles = StyleSheet.create({
     color: "#2e2e2e",
     marginTop: 2,
   },
+  feedbackCard: {
+    marginTop: 22,
+    marginHorizontal: 24,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    gap: 12,
+  },
+  feedbackText: {
+    color: "#f5f5f0",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 8,
+    backgroundColor: "#f5f5f0",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: "#14381f",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
   cardArea: {
     marginTop: 12,
   },
@@ -232,6 +397,28 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     justifyContent: "space-between",
   },
+  frontTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  statusBadge: {
+    backgroundColor: "rgba(245, 245, 240, 0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  statusText: {
+    color: "#f5f5f0",
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  planText: {
+    color: "#f5f5f0",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   frontRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -250,6 +437,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: "#f5f5f0",
     fontSize: 18,
+    fontWeight: "700",
+  },
+  frontSmallValue: {
+    marginTop: 4,
+    color: "#f5f5f0",
+    fontSize: 14,
     fontWeight: "700",
   },
   fieldSpacing: {
@@ -316,6 +509,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 20,
   },
   bigQrBox: {
     width: 220,
@@ -324,6 +518,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f0",
     alignItems: "center",
     justifyContent: "center",
+  },
+  qrCodeText: {
+    marginTop: 20,
+    color: "#f5f5f0",
+    fontSize: 12,
+    textAlign: "center",
   },
   dots: {
     marginTop: 8,

@@ -4,6 +4,10 @@ import express from "express";
 import { env } from "./config/env";
 import { prisma } from "./lib/prisma";
 import { authRouter } from "./routes/auth";
+import { carteirinhaRouter } from "./routes/carteirinha";
+import { historiaRouter } from "./routes/historia";
+import { jogosRouter } from "./routes/jogos";
+import { titulosRouter } from "./routes/titulos";
 
 const app = express();
 
@@ -15,6 +19,10 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/carteirinha", carteirinhaRouter);
+app.use("/historia", historiaRouter);
+app.use("/jogos", jogosRouter);
+app.use("/titulos", titulosRouter);
 
 app.use((_req, res) => {
   return res.status(404).json({ message: "Not found" });
