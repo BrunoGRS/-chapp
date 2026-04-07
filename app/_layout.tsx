@@ -1,11 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { ChapeTheme } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
@@ -38,7 +40,7 @@ function AuthNavigationGate() {
 
   if (status === 'loading') {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: ChapeTheme.colors.page }}>
         <ActivityIndicator size="large" />
       </View>
     );
@@ -54,12 +56,19 @@ function AuthNavigationGate() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      void SystemUI.setBackgroundColorAsync(ChapeTheme.colors.page);
+    }
+  }, []);
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
         <AuthNavigationGate />
       </AuthProvider>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </ThemeProvider>
   );
 }

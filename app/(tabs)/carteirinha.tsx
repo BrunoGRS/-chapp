@@ -1,10 +1,8 @@
 import * as Clipboard from "expo-clipboard";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Image,
   ImageBackground,
@@ -15,9 +13,14 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
+import { AnimatedEnter } from "@/components/animated-enter";
+import { StateCard } from "@/components/state-card";
+import { ChapeTheme } from "@/constants/theme";
+import { useAuth } from "@/contexts/auth-context";
 import { getCarteirinhaOverview } from "@/services/carteirinha.service";
 import type { CarteirinhaOverview } from "@/types/carteirinha";
 
@@ -28,15 +31,16 @@ type CardPage = {
   side: CardSide;
 };
 
+const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const USER_AVATAR = require("../../assets/images/personagem.png");
 const pages: CardPage[] = [
   { id: "frente", side: "front" },
   { id: "verso", side: "qr" },
 ];
 
-const { width } = Dimensions.get("window");
-const pageWidth = width - 52;
-
 export default function CarteirinhaScreen() {
+  const { width } = useWindowDimensions();
+  const { user } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [data, setData] = useState<CarteirinhaOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,7 +75,7 @@ export default function CarteirinhaScreen() {
   }
 
   function onMomentumEnd(event: { nativeEvent: { contentOffset: { x: number } } }) {
-    const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
+    const next = Math.round(event.nativeEvent.contentOffset.x / slideWidth);
     setCurrentIndex(next);
   }
 
@@ -89,7 +93,7 @@ export default function CarteirinhaScreen() {
       message: [
         "Carteirinha CHApp",
         `Nome: ${data.memberName}`,
-        `Matricula: ${data.memberNumber}`,
+        `Matrícula: ${data.memberNumber}`,
         `Plano: ${data.planName}`,
         `Validade: ${data.validUntil}`,
         `QR: ${data.qrCode}`,
@@ -103,11 +107,11 @@ export default function CarteirinhaScreen() {
     }
 
     await Clipboard.setStringAsync(data.qrCode);
-    Alert.alert("QR copiado", "O codigo da carteirinha foi copiado para a area de transferencia.");
+    Alert.alert("QR copiado", "O código da carteirinha foi copiado para a área de transferência.");
   }
 
   function handleRemoveCard() {
-    Alert.alert("Remover carteirinha", "Deseja remover a carteirinha desta sessao do app?", [
+    Alert.alert("Remover carteirinha", "Deseja remover a carteirinha desta sessão do app?", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Remover",
@@ -117,6 +121,18 @@ export default function CarteirinhaScreen() {
     ]);
   }
 
+  const infoCards = useMemo(
+    () => [
+      { label: "status", value: data?.status ?? "Ativa" },
+      { label: "plano", value: data?.planName ?? "Sócio Torcedor" },
+      { label: "validade", value: data?.validUntil ?? "--" },
+    ],
+    [data?.planName, data?.status, data?.validUntil]
+  );
+  const slideWidth = width;
+  const cardWidth = width - 48;
+  const isCompact = width < 460;
+
   function renderCardPage({ item }: ListRenderItemInfo<CardPage>) {
     if (!data) {
       return null;
@@ -124,45 +140,47 @@ export default function CarteirinhaScreen() {
 
     if (item.side === "front") {
       return (
-        <View style={styles.page}>
-          <View style={styles.card}>
-            <View style={styles.cardGradient} />
+        <View style={[styles.slide, { width: slideWidth }]}>
+          <View style={[styles.memberCard, { width: cardWidth }]}>
+            <View style={styles.memberCardGlow} />
 
-            <View style={styles.frontContent}>
-              <View style={styles.frontTop}>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>{data.status}</Text>
+            <View style={styles.memberHeader}>
+              <View style={styles.memberBadge}>
+                <Text style={styles.memberBadgeText}>{data.status}</Text>
+              </View>
+              <Text style={styles.memberPlan}>{data.planName}</Text>
+            </View>
+
+            <View style={styles.memberMain}>
+              <View style={styles.memberInfoColumn}>
+                <Text style={styles.memberLabel}>Nome do sócio</Text>
+                <Text style={styles.memberValue}>{data.memberName}</Text>
+
+                <Text style={[styles.memberLabel, styles.fieldSpacing]}>Matrícula</Text>
+                <View style={styles.inlineValueBox}>
+                  <Text style={styles.inlineValueText}>{data.memberNumber}</Text>
                 </View>
-                <Text style={styles.planText}>{data.planName}</Text>
+
+                <Text style={[styles.memberLabel, styles.fieldSpacing]}>Validade</Text>
+                <Text style={styles.memberSmallValue}>{data.validUntil}</Text>
               </View>
 
-              <View style={styles.frontRow}>
-                <View style={styles.frontColumn}>
-                  <Text style={styles.frontLabel}>Nome do Socio</Text>
-                  <Text style={styles.frontValue}>{data.memberName}</Text>
-
-                  <Text style={[styles.frontLabel, styles.fieldSpacing]}>Matricula</Text>
-                  <View style={styles.codeBox}>
-                    <Text style={styles.codeText}>{data.memberNumber}</Text>
-                  </View>
-
-                  <Text style={[styles.frontLabel, styles.fieldSpacing]}>Validade</Text>
-                  <Text style={styles.frontSmallValue}>{data.validUntil}</Text>
+              <View style={styles.memberSideColumn}>
+                <View style={styles.photoWrap}>
+                  <Image source={CHAPE_BADGE} style={styles.photoImage} />
                 </View>
-
-                <View style={styles.clubColumn}>
-                  <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.clubLogo} />
-                  <Text style={styles.clubVerticalText}>{data.clubName}</Text>
-                </View>
+                <Image source={CHAPE_BADGE} style={styles.clubSeal} />
+                <Text style={styles.clubNameText}>{data.clubName}</Text>
               </View>
+            </View>
 
-              <View style={styles.frontFooter}>
-                <View style={styles.smallQr}>
-                  <MaterialIcons name="qr-code" size={58} color="#2b6f42" />
-                </View>
-                <View style={styles.memberPhotoWrap}>
-                  <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.memberPhoto} />
-                </View>
+            <View style={styles.memberFooter}>
+              <View style={styles.qrPreviewBox}>
+                <MaterialIcons name="qr-code-2" size={52} color={ChapeTheme.colors.primaryBright} />
+              </View>
+              <View style={styles.memberFooterCopy}>
+                <Text style={styles.memberFooterEyebrow}>Documento digital</Text>
+                <Text style={styles.memberFooterText}>Use o verso para visualizar e compartilhar o QR code.</Text>
               </View>
             </View>
           </View>
@@ -171,15 +189,18 @@ export default function CarteirinhaScreen() {
     }
 
     return (
-      <View style={styles.page}>
-        <View style={styles.card}>
-          <View style={styles.cardGradient} />
-          <View style={styles.qrContent}>
-            <View style={styles.bigQrBox}>
-              <MaterialIcons name="qr-code" size={160} color="#247248" />
-            </View>
-            <Text style={styles.qrCodeText}>{data.qrCode}</Text>
+      <View style={[styles.slide, { width: slideWidth }]}>
+        <View style={[styles.memberCard, styles.qrCard, { width: cardWidth }]}>
+          <View style={styles.memberCardGlow} />
+
+          <Text style={styles.qrTitle}>Validação rápida</Text>
+          <Text style={styles.qrSubtitle}>Apresente este código para identificação digital.</Text>
+
+          <View style={styles.bigQrBox}>
+            <MaterialIcons name="qr-code-2" size={180} color={ChapeTheme.colors.primaryBright} />
           </View>
+
+          <Text style={styles.qrCodeText}>{data.qrCode}</Text>
         </View>
       </View>
     );
@@ -189,68 +210,96 @@ export default function CarteirinhaScreen() {
 
   return (
     <View style={styles.root}>
-      <ImageBackground
-        source={require("../../assets/images/chape_simbolo.jpg")}
-        resizeMode="cover"
-        style={styles.background}
-        imageStyle={styles.backgroundImage}
-      >
+      <ImageBackground source={CHAPE_BADGE} resizeMode="cover" style={styles.background} imageStyle={styles.bgImage}>
         <View style={styles.overlay} />
+        <View style={[styles.orb, styles.orbTop]} />
+        <View style={[styles.orb, styles.orbBottom]} />
+
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => void loadCarteirinha(true)}
-              tintColor="#f5f5f0"
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={() => void loadCarteirinha(true)} tintColor="#f7f5eb" />
           }
         >
-          <View style={styles.headerBar}>
-            <View style={styles.headerIcon}>
-              <MaterialIcons name="badge" size={18} color="#f6f7f5" />
-            </View>
+          <View style={styles.profilePill}>
+            <Image source={USER_AVATAR} style={styles.avatar} />
             <View>
-              <Text style={styles.headerTitle}>Carteirinha de Socio</Text>
-              <Text style={styles.headerSubtitle}>
-                {data?.updatedAt
-                  ? `Atualizado em: ${new Date(data.updatedAt).toLocaleString("pt-BR")}`
-                  : "Atualizando dados da carteirinha"}
-              </Text>
+              <Text style={styles.profileEyebrow}>Sócio torcedor</Text>
+              <Text style={styles.profileName}>{user?.name ?? "Torcedor"}</Text>
             </View>
           </View>
 
-          {loading ? (
-            <View style={styles.feedbackCard}>
-              <ActivityIndicator size="large" color="#f5f5f0" />
-              <Text style={styles.feedbackText}>Carregando carteirinha...</Text>
+          <AnimatedEnter delay={40}>
+            <View style={styles.heroCard}>
+            <Text style={styles.heroEyebrow}>Carteirinha digital</Text>
+            <Text style={styles.heroTitle}>Documento de acesso com leitura mais premium</Text>
+            <Text style={styles.heroSubtitle}>
+              Frente e verso em destaque, informações resumidas e ações organizadas para uso rápido.
+            </Text>
+
+            <View style={[styles.infoRow, isCompact && styles.stackColumn]}>
+              {infoCards.map((item) => (
+                <View key={item.label} style={[styles.infoCard, isCompact && styles.fullWidthCard]}>
+                  <Text style={styles.infoValue}>{item.value}</Text>
+                  <Text style={styles.infoLabel}>{item.label}</Text>
+                </View>
+              ))}
             </View>
+
+            {data?.updatedAt ? (
+              <View style={styles.updatedPill}>
+                <MaterialIcons name="schedule" size={14} color={ChapeTheme.colors.textMuted} />
+                <Text style={styles.updatedText}>
+                  Atualizado em {new Date(data.updatedAt).toLocaleDateString("pt-BR")}
+                </Text>
+              </View>
+            ) : null}
+            </View>
+          </AnimatedEnter>
+
+          {loading ? (
+            <AnimatedEnter delay={90}>
+              <StateCard
+                loading
+                title="Carregando carteirinha"
+                description="Montando a frente, o verso e as ações principais do documento digital."
+              />
+            </AnimatedEnter>
           ) : null}
 
           {!loading && errorMessage ? (
-            <View style={styles.feedbackCard}>
-              <MaterialIcons name="wifi-off" size={30} color="#f5f5f0" />
-              <Text style={styles.feedbackText}>{errorMessage}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => void loadCarteirinha()}>
-                <Text style={styles.retryText}>Tentar novamente</Text>
-              </TouchableOpacity>
-            </View>
+            <AnimatedEnter delay={90}>
+              <StateCard
+                icon="wifi-off"
+                title="Falha ao carregar carteirinha"
+                description={errorMessage}
+                actionLabel="Tentar novamente"
+                onAction={() => void loadCarteirinha()}
+              />
+            </AnimatedEnter>
           ) : null}
 
           {emptyStateVisible ? (
-            <View style={styles.feedbackCard}>
-              <MaterialIcons name="credit-card-off" size={34} color="#f5f5f0" />
-              <Text style={styles.feedbackText}>A carteirinha foi removida desta sessao do app.</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => void loadCarteirinha()}>
-                <Text style={styles.retryText}>Baixar novamente</Text>
-              </TouchableOpacity>
-            </View>
+            <AnimatedEnter delay={90}>
+              <StateCard
+                icon="credit-card-off"
+                title="Carteirinha removida"
+                description="A carteirinha foi ocultada apenas desta sessão. Você pode baixar novamente quando quiser."
+                actionLabel="Baixar novamente"
+                onAction={() => void loadCarteirinha()}
+              />
+            </AnimatedEnter>
           ) : null}
 
           {!loading && !errorMessage && !isRemoved ? (
             <>
-              <View style={styles.cardArea}>
+              <AnimatedEnter delay={120} style={styles.sectionHeader}>
+                <Text style={styles.sectionEyebrow}>Visualização</Text>
+                <Text style={styles.sectionTitle}>Frente e verso da carteirinha</Text>
+              </AnimatedEnter>
+
+              <AnimatedEnter delay={150}>
                 <FlatList
                   ref={listRef}
                   data={pages}
@@ -259,35 +308,64 @@ export default function CarteirinhaScreen() {
                   keyExtractor={(item) => item.id}
                   renderItem={renderCardPage}
                   showsHorizontalScrollIndicator={false}
-                  decelerationRate="fast"
-                  getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+                  getItemLayout={(_, index) => ({ length: slideWidth, offset: slideWidth * index, index })}
                   onMomentumScrollEnd={onMomentumEnd}
+                  style={styles.carousel}
                 />
-              </View>
+              </AnimatedEnter>
 
-              <View style={styles.dots}>
+              <AnimatedEnter delay={190} style={styles.paginationRow}>
                 {pages.map((page, index) => (
-                  <TouchableOpacity key={page.id} onPress={() => goTo(index)}>
-                    <View style={[styles.dot, currentIndex === index && styles.dotActive]} />
+                  <TouchableOpacity key={page.id} style={styles.paginationButton} onPress={() => goTo(index)}>
+                    <View style={[styles.paginationDot, currentIndex === index && styles.paginationDotActive]} />
+                    <Text style={[styles.paginationLabel, currentIndex === index && styles.paginationLabelActive]}>
+                      {index === 0 ? "Frente" : "Verso"}
+                    </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </AnimatedEnter>
 
-              <View style={styles.actions}>
-                <TouchableOpacity style={styles.actionButton} onPress={() => void handleExport()}>
-                  <MaterialIcons name="description" size={18} color="#355c20" />
-                  <Text style={styles.actionText}>{data?.actions.exportLabel ?? "Exportar"}</Text>
-                </TouchableOpacity>
+              <AnimatedEnter delay={220} style={styles.sectionHeader}>
+                <Text style={styles.sectionEyebrow}>Ações</Text>
+                <Text style={styles.sectionTitle}>Ferramentas da carteirinha</Text>
+              </AnimatedEnter>
 
-                <TouchableOpacity style={styles.actionButton} onPress={() => void handleCopyQrCode()}>
-                  <MaterialIcons name="content-copy" size={18} color="#355c20" />
-                  <Text style={styles.actionText}>{data?.actions.copyLabel ?? "Copiar QR Code"}</Text>
-                </TouchableOpacity>
+              <View style={styles.actionsColumn}>
+                <AnimatedEnter delay={250}>
+                  <TouchableOpacity style={styles.actionButton} onPress={() => void handleExport()}>
+                    <View style={styles.actionIconWrap}>
+                      <MaterialIcons name="share" size={18} color={ChapeTheme.colors.accent} />
+                    </View>
+                    <View style={styles.actionCopy}>
+                      <Text style={styles.actionTitle}>{data?.actions.exportLabel ?? "Exportar"}</Text>
+                      <Text style={styles.actionSubtitle}>Compartilhe os dados da carteirinha com rapidez.</Text>
+                    </View>
+                  </TouchableOpacity>
+                </AnimatedEnter>
 
-                <TouchableOpacity style={styles.actionButton} onPress={handleRemoveCard}>
-                  <MaterialIcons name="delete" size={18} color="#355c20" />
-                  <Text style={styles.actionText}>{data?.actions.removeLabel ?? "Remover Carteirinha"}</Text>
-                </TouchableOpacity>
+                <AnimatedEnter delay={300}>
+                  <TouchableOpacity style={styles.actionButton} onPress={() => void handleCopyQrCode()}>
+                    <View style={styles.actionIconWrap}>
+                      <MaterialIcons name="content-copy" size={18} color={ChapeTheme.colors.accent} />
+                    </View>
+                    <View style={styles.actionCopy}>
+                      <Text style={styles.actionTitle}>{data?.actions.copyLabel ?? "Copiar QR Code"}</Text>
+                      <Text style={styles.actionSubtitle}>Copie o código e use em outros fluxos quando precisar.</Text>
+                    </View>
+                  </TouchableOpacity>
+                </AnimatedEnter>
+
+                <AnimatedEnter delay={350}>
+                  <TouchableOpacity style={styles.actionButton} onPress={handleRemoveCard}>
+                    <View style={[styles.actionIconWrap, styles.actionIconDanger]}>
+                      <MaterialIcons name="delete-outline" size={18} color={ChapeTheme.colors.danger} />
+                    </View>
+                    <View style={styles.actionCopy}>
+                      <Text style={styles.actionTitle}>{data?.actions.removeLabel ?? "Remover Carteirinha"}</Text>
+                      <Text style={styles.actionSubtitle}>Oculta a carteirinha apenas desta sessão do app.</Text>
+                    </View>
+                  </TouchableOpacity>
+                </AnimatedEnter>
               </View>
             </>
           ) : null}
@@ -300,263 +378,446 @@ export default function CarteirinhaScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#073b1a",
+    backgroundColor: ChapeTheme.colors.page,
   },
   background: {
     flex: 1,
   },
-  backgroundImage: {
-    opacity: 0.2,
+  bgImage: {
+    opacity: 0.1,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4, 42, 18, 0.86)",
+    backgroundColor: ChapeTheme.colors.overlay,
+  },
+  orb: {
+    position: "absolute",
+    borderRadius: 999,
+  },
+  orbTop: {
+    width: 240,
+    height: 240,
+    top: -70,
+    right: -46,
+    backgroundColor: "rgba(215, 240, 106, 0.08)",
+  },
+  orbBottom: {
+    width: 300,
+    height: 300,
+    bottom: 90,
+    left: -150,
+    backgroundColor: "rgba(123, 216, 255, 0.07)",
   },
   content: {
-    paddingBottom: 44,
+    paddingTop: 26,
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
-  headerBar: {
-    marginTop: 22,
-    marginHorizontal: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.96)",
-    borderRadius: 22,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  profilePill: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
+    padding: 8,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(247, 245, 235, 0.92)",
   },
-  headerIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#355c20",
-    alignItems: "center",
-    justifyContent: "center",
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: ChapeTheme.colors.primary,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#171717",
+  profileEyebrow: {
+    fontSize: 11,
+    color: ChapeTheme.colors.textSubtle,
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
   },
-  headerSubtitle: {
-    fontSize: 10,
-    color: "#2e2e2e",
+  profileName: {
     marginTop: 2,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#102015",
+  },
+  heroCard: {
+    marginTop: 20,
+    padding: 24,
+    borderRadius: ChapeTheme.radii.lg,
+    backgroundColor: "rgba(13, 48, 28, 0.86)",
+    borderWidth: 1,
+    borderColor: ChapeTheme.colors.borderStrong,
+    ...ChapeTheme.shadow,
+  },
+  heroEyebrow: {
+    color: ChapeTheme.colors.gold,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+  },
+  heroTitle: {
+    marginTop: 10,
+    color: ChapeTheme.colors.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800",
+  },
+  heroSubtitle: {
+    marginTop: 10,
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  infoRow: {
+    marginTop: 22,
+    flexDirection: "row",
+    gap: 10,
+  },
+  stackColumn: {
+    flexDirection: "column",
+  },
+  infoCard: {
+    flex: 1,
+    minHeight: 96,
+    padding: 14,
+    borderRadius: ChapeTheme.radii.sm,
+    backgroundColor: "rgba(247, 245, 235, 0.06)",
+    justifyContent: "space-between",
+  },
+  fullWidthCard: {
+    width: "100%",
+    flex: 0,
+  },
+  infoValue: {
+    color: ChapeTheme.colors.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  infoLabel: {
+    color: ChapeTheme.colors.textSubtle,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  updatedPill: {
+    alignSelf: "flex-start",
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(247, 245, 235, 0.06)",
+  },
+  updatedText: {
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "600",
   },
   feedbackCard: {
-    marginTop: 22,
-    marginHorizontal: 24,
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    marginTop: 20,
+    padding: 24,
+    borderRadius: ChapeTheme.radii.md,
+    backgroundColor: ChapeTheme.colors.surfaceMuted,
     alignItems: "center",
     gap: 12,
   },
   feedbackText: {
-    color: "#f5f5f0",
+    color: ChapeTheme.colors.text,
     fontSize: 14,
     textAlign: "center",
   },
   retryButton: {
-    marginTop: 8,
-    backgroundColor: "#f5f5f0",
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    marginTop: 4,
+    backgroundColor: ChapeTheme.colors.accent,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: ChapeTheme.radii.pill,
   },
   retryText: {
-    color: "#14381f",
+    color: "#102015",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     textTransform: "uppercase",
+    letterSpacing: 0.7,
   },
-  cardArea: {
-    marginTop: 12,
+  sectionHeader: {
+    marginTop: 28,
+    marginBottom: 14,
   },
-  page: {
-    width: pageWidth,
-    alignItems: "center",
+  sectionEyebrow: {
+    color: ChapeTheme.colors.gold,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
   },
-  card: {
-    width: "88%",
-    height: 420,
-    borderRadius: 28,
+  sectionTitle: {
+    marginTop: 6,
+    color: ChapeTheme.colors.text,
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  carousel: {
+    marginHorizontal: -20,
+  },
+  slide: {
+    paddingHorizontal: 24,
+  },
+  memberCard: {
+    minHeight: 460,
+    borderRadius: 30,
+    padding: 22,
     overflow: "hidden",
-    backgroundColor: "#0c5a34",
+    backgroundColor: "#f2f6ec",
+    ...ChapeTheme.shadow,
   },
-  cardGradient: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#0f7a49",
-    opacity: 0.86,
-  },
-  frontContent: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    justifyContent: "space-between",
-  },
-  frontTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  qrCard: {
     alignItems: "center",
+    justifyContent: "center",
   },
-  statusBadge: {
-    backgroundColor: "rgba(245, 245, 240, 0.18)",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  memberCardGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(20, 83, 45, 0.06)",
   },
-  statusText: {
-    color: "#f5f5f0",
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
+  memberHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
-  planText: {
-    color: "#f5f5f0",
+  memberBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(20, 83, 45, 0.08)",
+  },
+  memberBadgeText: {
+    color: ChapeTheme.colors.primaryBright,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
   },
-  frontRow: {
+  memberPlan: {
+    color: "#3f5545",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  memberMain: {
+    marginTop: 28,
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 16,
   },
-  frontColumn: {
-    width: "52%",
+  memberInfoColumn: {
+    flex: 1,
   },
-  frontLabel: {
-    fontSize: 12,
+  memberLabel: {
+    color: "#6f7d72",
+    fontSize: 11,
+    fontWeight: "800",
     textTransform: "uppercase",
-    color: "#f5f5f0",
-    fontWeight: "700",
-    letterSpacing: 0.6,
+    letterSpacing: 1,
   },
-  frontValue: {
-    marginTop: 4,
-    color: "#f5f5f0",
+  memberValue: {
+    marginTop: 6,
+    color: "#102015",
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "800",
+  },
+  memberSmallValue: {
+    marginTop: 6,
+    color: "#102015",
     fontSize: 18,
     fontWeight: "700",
   },
-  frontSmallValue: {
-    marginTop: 4,
-    color: "#f5f5f0",
-    fontSize: 14,
-    fontWeight: "700",
-  },
   fieldSpacing: {
-    marginTop: 20,
+    marginTop: 22,
   },
-  codeBox: {
-    marginTop: 6,
-    backgroundColor: "#f5f5f0",
-    borderRadius: 4,
-    width: 88,
-    paddingVertical: 6,
+  inlineValueBox: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "rgba(20, 83, 45, 0.08)",
+  },
+  inlineValueText: {
+    color: "#102015",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  memberSideColumn: {
+    width: 112,
     alignItems: "center",
   },
-  codeText: {
-    color: "#1f2a1f",
-    fontSize: 14,
-    fontWeight: "700",
+  photoWrap: {
+    width: 96,
+    height: 96,
+    padding: 5,
+    borderRadius: 48,
+    backgroundColor: "#ffffff",
+    ...ChapeTheme.shadow,
   },
-  clubColumn: {
-    width: "40%",
-    alignItems: "center",
-  },
-  clubLogo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: "#cfe8d6",
-  },
-  clubVerticalText: {
-    marginTop: 14,
-    color: "#f1f6ef",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
-    textAlign: "center",
-  },
-  frontFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-  },
-  smallQr: {
-    width: 84,
-    height: 84,
-    borderRadius: 8,
-    backgroundColor: "#f5f5f0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  memberPhotoWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "#f5f5f0",
-    padding: 4,
-  },
-  memberPhoto: {
+  photoImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 40,
+    borderRadius: 44,
   },
-  qrContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
+  clubSeal: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginTop: 18,
   },
-  bigQrBox: {
-    width: 220,
-    height: 220,
-    borderRadius: 6,
-    backgroundColor: "#f5f5f0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  qrCodeText: {
-    marginTop: 20,
-    color: "#f5f5f0",
+  clubNameText: {
+    marginTop: 14,
+    color: "#294032",
     fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
     textAlign: "center",
   },
-  dots: {
-    marginTop: 8,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "rgba(215, 223, 213, 0.45)",
-  },
-  dotActive: {
-    backgroundColor: "#a7b8a6",
-  },
-  actions: {
-    marginTop: 14,
-    paddingHorizontal: 18,
-    gap: 8,
-  },
-  actionButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.96)",
-    borderRadius: 12,
-    minHeight: 48,
+  memberFooter: {
+    marginTop: "auto",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    gap: 16,
+  },
+  qrPreviewBox: {
+    width: 92,
+    height: 92,
+    borderRadius: 20,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(20, 83, 45, 0.08)",
+  },
+  memberFooterCopy: {
+    flex: 1,
+  },
+  memberFooterEyebrow: {
+    color: ChapeTheme.colors.primaryBright,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+  },
+  memberFooterText: {
+    marginTop: 6,
+    color: "#536257",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  qrTitle: {
+    color: "#102015",
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  qrSubtitle: {
+    marginTop: 10,
+    color: "#536257",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  bigQrBox: {
+    marginTop: 24,
+    width: 240,
+    height: 240,
+    borderRadius: 20,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(20, 83, 45, 0.08)",
+  },
+  qrCodeText: {
+    marginTop: 22,
+    color: "#294032",
+    fontSize: 12,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  paginationRow: {
+    marginTop: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+  },
+  paginationButton: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  actionText: {
-    fontSize: 14,
-    color: "#1c1f1b",
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(247, 245, 235, 0.24)",
+  },
+  paginationDotActive: {
+    width: 24,
+    backgroundColor: ChapeTheme.colors.accent,
+  },
+  paginationLabel: {
+    color: ChapeTheme.colors.textSubtle,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  paginationLabelActive: {
+    color: ChapeTheme.colors.text,
     fontWeight: "700",
+  },
+  actionsColumn: {
+    gap: 12,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 18,
+    borderRadius: ChapeTheme.radii.md,
+    backgroundColor: "rgba(8, 28, 17, 0.88)",
+    borderWidth: 1,
+    borderColor: ChapeTheme.colors.border,
+  },
+  actionIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(215, 240, 106, 0.08)",
+  },
+  actionIconDanger: {
+    backgroundColor: "rgba(255, 137, 116, 0.08)",
+  },
+  actionCopy: {
+    flex: 1,
+  },
+  actionTitle: {
+    color: ChapeTheme.colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  actionSubtitle: {
+    marginTop: 6,
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Platform } from "react-native";
 
 import { signInRequest, signUpRequest } from "@/services/auth.service";
 import { setApiToken } from "@/services/apiClient";
@@ -18,6 +19,34 @@ type AuthContextValue = {
 };
 
 const AUTH_STORAGE_KEY = "chapp.auth.session";
+
+async function readStoredSession() {
+  if (Platform.OS === "web") {
+    return globalThis.localStorage?.getItem(AUTH_STORAGE_KEY) ?? null;
+  }
+
+  return SecureStore.getItemAsync(AUTH_STORAGE_KEY);
+}
+
+async function writeStoredSession(session: AuthSession) {
+  const serialized = JSON.stringify(session);
+
+  if (Platform.OS === "web") {
+    globalThis.localStorage?.setItem(AUTH_STORAGE_KEY, serialized);
+    return;
+  }
+
+  await SecureStore.setItemAsync(AUTH_STORAGE_KEY, serialized);
+}
+
+async function clearStoredSession() {
+  if (Platform.OS === "web") {
+    globalThis.localStorage?.removeItem(AUTH_STORAGE_KEY);
+    return;
+  }
+
+  await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -44,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const bootstrapSession = async () => {
       try {
-        const storedSession = await SecureStore.getItemAsync(AUTH_STORAGE_KEY);
+        const storedSession = await readStoredSession();
         if (!storedSession) {
           await applySession(null);
           return;
@@ -68,21 +97,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(
     async (payload: SignInPayload) => {
       const session = await signInRequest(payload);
-      await SecureStore.setItemAsync(AUTH_STORAGE_KEY, JSON.stringify(session));
+      try {
+        await writeStoredSession(session);
+      } catch {
+        // Allow login to proceed even if persistence is unavailable in the current platform.
+      }
       await applySession(session);
     },
     [applySession]
   );
 
   const signOut = useCallback(async () => {
-    await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
+    try {
+      await clearStoredSession();
+    } catch {
+      // Clearing persisted state is best-effort only.
+    }
     await applySession(null);
   }, [applySession]);
 
   const signUp = useCallback(
     async (payload: SignUpPayload) => {
       const session = await signUpRequest(payload);
-      await SecureStore.setItemAsync(AUTH_STORAGE_KEY, JSON.stringify(session));
+      try {
+        await writeStoredSession(session);
+      } catch {
+        // Allow registration to proceed even if persistence is unavailable in the current platform.
+      }
       await applySession(session);
     },
     [applySession]

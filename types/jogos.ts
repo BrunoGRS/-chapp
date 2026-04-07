@@ -3,7 +3,9 @@ export type StandingForm = "up" | "down" | "stable";
 export type FeaturedMatch = {
   id: string;
   homeTeam: string;
+  homeTeamCrest?: string | null;
   awayTeam: string;
+  awayTeamCrest?: string | null;
   homeScore: number;
   awayScore: number;
   status: string;

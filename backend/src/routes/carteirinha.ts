@@ -17,10 +17,10 @@ carteirinhaRouter.get("/overview", requireAuth, (req: AuthenticatedRequest, res)
   return res.json({
     updatedAt: "2026-03-19T01:35:00.000Z",
     status: "Ativa",
-    clubName: "Associacao Chapecoense de Futebol",
+    clubName: "Associação Chapecoense de Futebol",
     memberName: req.user.name,
     memberNumber,
-    planName: "Socio Torcedor",
+    planName: "Sócio Torcedor",
     validUntil,
     qrCode,
     actions: {

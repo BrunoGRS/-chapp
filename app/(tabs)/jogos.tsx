@@ -1,24 +1,29 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   ImageBackground,
+  ImageSourcePropType,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
+import { AnimatedEnter } from "@/components/animated-enter";
+import { StateCard } from "@/components/state-card";
+import { ChapeTheme } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { getJogosOverview } from "@/services/jogos.service";
-import type { FeaturedMatch, JogosOverview, StandingForm } from "@/types/jogos";
+import type { FeaturedMatch, JogosOverview, Standing, StandingForm } from "@/types/jogos";
 
 const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const USER_AVATAR = require("../../assets/images/personagem.png");
 
 export default function JogosScreen() {
+  const { width } = useWindowDimensions();
   const { user } = useAuth();
   const [data, setData] = useState<JogosOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,12 +56,12 @@ export default function JogosScreen() {
 
   function renderFormIcon(form: StandingForm) {
     if (form === "up") {
-      return <MaterialIcons name="arrow-drop-up" size={16} color="#5fae66" />;
+      return <MaterialIcons name="arrow-drop-up" size={20} color="#63d482" />;
     }
     if (form === "down") {
-      return <MaterialIcons name="arrow-drop-down" size={16} color="#dc6d6d" />;
+      return <MaterialIcons name="arrow-drop-down" size={20} color="#ff8974" />;
     }
-    return <MaterialIcons name="remove" size={14} color="#9aa39a" />;
+    return <MaterialIcons name="remove" size={16} color={ChapeTheme.colors.textSubtle} />;
   }
 
   function isChapeTeam(teamName: string) {
@@ -92,76 +97,124 @@ export default function JogosScreen() {
     return index === 0 ? "Próximo jogo" : "Na sequência";
   }
 
-  function renderTeamBadge(teamName: string) {
+  function getTeamBadgeSource(teamName: string, crestUrl?: string | null): ImageSourcePropType | null {
     if (isChapeTeam(teamName)) {
-      return <Image source={CHAPE_BADGE} style={styles.teamLogo} />;
+      return CHAPE_BADGE;
     }
 
-    return (
-      <View style={styles.opponentBadge}>
-        <MaterialIcons name="sports-soccer" size={14} color="#566056" />
-      </View>
-    );
+    if (crestUrl) {
+      return { uri: crestUrl };
+    }
+
+    return null;
   }
 
   const featuredMatches = data?.featuredMatches ?? [];
   const standings = data?.standings ?? [];
+  const isCompact = width < 460;
+
+  const chapeStanding = standings.find((item) => isChapeTeam(item.team));
+  const standingsSummary = [
+    { label: "competição", value: data?.competition ?? "Calendário" },
+    { label: "jogos em foco", value: String(featuredMatches.length).padStart(2, "0") },
+    { label: "posição atual", value: chapeStanding ? `${chapeStanding.position}º` : "--" },
+  ];
 
   return (
     <View style={styles.root}>
-      <ImageBackground
-        source={require("../../assets/images/chape_simbolo.jpg")}
-        resizeMode="cover"
-        style={styles.background}
-        imageStyle={styles.backgroundImage}
-      >
+      <ImageBackground source={CHAPE_BADGE} resizeMode="cover" style={styles.background} imageStyle={styles.bgImage}>
         <View style={styles.overlay} />
+        <View style={[styles.orb, styles.orbTop]} />
+        <View style={[styles.orb, styles.orbBottom]} />
+
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => void loadJogos(true)} tintColor="#f5f5f0" />
+            <RefreshControl refreshing={refreshing} onRefresh={() => void loadJogos(true)} tintColor="#f7f5eb" />
           }
         >
-          <View style={styles.headerBar}>
-            <Image source={require("../../assets/images/chape_simbolo.jpg")} style={styles.avatar} />
-            <Text style={styles.profileName}>{user?.name ?? "Torcedor"}</Text>
+          <View style={styles.profilePill}>
+            <Image source={USER_AVATAR} style={styles.avatar} />
+            <View>
+              <Text style={styles.profileEyebrow}>Central de jogos</Text>
+              <Text style={styles.profileName}>{user?.name ?? "Torcedor"}</Text>
+            </View>
           </View>
 
-          {loading ? (
-            <View style={styles.feedbackCard}>
-              <ActivityIndicator size="large" color="#f5f5f0" />
-              <Text style={styles.feedbackText}>Carregando jogos e classificacao...</Text>
+          <AnimatedEnter delay={40}>
+            <View style={styles.heroCard}>
+            <Text style={styles.heroEyebrow}>Agenda e classificação</Text>
+            <Text style={styles.heroTitle}>{data?.competition ?? "Acompanhe a campanha da Chape"}</Text>
+            <Text style={styles.heroSubtitle}>
+              Cards de partidas com leitura mais direta e tabela com hierarquia melhor para acompanhar o momento do clube.
+            </Text>
+
+            <View style={[styles.summaryRow, isCompact && styles.stackColumn]}>
+              {standingsSummary.map((item) => (
+                <View key={item.label} style={[styles.summaryCard, isCompact && styles.fullWidthCard]}>
+                  <Text style={styles.summaryValue}>{item.value}</Text>
+                  <Text style={styles.summaryLabel}>{item.label}</Text>
+                </View>
+              ))}
             </View>
+
+            {data?.updatedAt ? (
+              <View style={styles.updatedPill}>
+                <MaterialIcons name="schedule" size={14} color={ChapeTheme.colors.textMuted} />
+                <Text style={styles.updatedText}>
+                  Atualizado em {new Date(data.updatedAt).toLocaleDateString("pt-BR")}
+                </Text>
+              </View>
+            ) : null}
+            </View>
+          </AnimatedEnter>
+
+          {loading ? (
+            <AnimatedEnter delay={90}>
+              <StateCard
+                loading
+                title="Carregando jogos"
+                description="Buscando agenda em destaque e classificação da competição."
+              />
+            </AnimatedEnter>
           ) : null}
 
           {!loading && errorMessage ? (
-            <View style={styles.feedbackCard}>
-              <MaterialIcons name="wifi-off" size={30} color="#f5f5f0" />
-              <Text style={styles.feedbackText}>{errorMessage}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => void loadJogos()}>
-                <Text style={styles.retryText}>Tentar novamente</Text>
-              </TouchableOpacity>
-            </View>
+            <AnimatedEnter delay={90}>
+              <StateCard
+                icon="wifi-off"
+                title="Falha ao carregar jogos"
+                description={errorMessage}
+                actionLabel="Tentar novamente"
+                onAction={() => void loadJogos()}
+              />
+            </AnimatedEnter>
           ) : null}
 
           {!loading && !errorMessage ? (
             <>
-              <View style={styles.scoresRow}>
+              <AnimatedEnter delay={120} style={styles.sectionHeader}>
+                <Text style={styles.sectionEyebrow}>Partidas</Text>
+                <Text style={styles.sectionTitle}>Recorte mais importante do calendário</Text>
+              </AnimatedEnter>
+
+              <View style={styles.matchesColumn}>
                 {featuredMatches.length ? (
                   featuredMatches.map((match, index) => {
                     const variant = getMatchVariant(match);
 
                     return (
-                      <View
+                      <AnimatedEnter
                         key={match.id}
+                        delay={150 + index * 50}
                         style={[
-                          styles.scoreCard,
-                          variant === "live" && styles.scoreCardLive,
-                          variant === "upcoming" && styles.scoreCardUpcoming,
+                          styles.matchCard,
+                          variant === "live" && styles.matchCardLive,
+                          variant === "upcoming" && styles.matchCardUpcoming,
                         ]}
                       >
-                        <View style={styles.matchMeta}>
+                        <View style={styles.matchHeader}>
                           <View style={[styles.matchBadge, variant === "live" && styles.matchBadgeLive]}>
                             <Text style={[styles.matchBadgeText, variant === "live" && styles.matchBadgeTextLive]}>
                               {getMatchBadge(match, index)}
@@ -169,61 +222,68 @@ export default function JogosScreen() {
                           </View>
                           <Text style={styles.matchTime}>{match.matchTime}</Text>
                         </View>
+
                         <Text style={styles.matchStatus}>{match.status}</Text>
-                        <View style={styles.scoreLine}>
-                          <View style={styles.teamBlock}>
-                            {renderTeamBadge(match.homeTeam)}
-                            <Text style={styles.teamName}>{match.homeTeam}</Text>
+
+                        <View style={styles.matchScoreRow}>
+                          <TeamBlock
+                            align="left"
+                            logo={<TeamBadge source={getTeamBadgeSource(match.homeTeam, match.homeTeamCrest)} />}
+                            name={match.homeTeam}
+                          />
+                          <View style={styles.scoreCenter}>
+                            <Text style={styles.scoreValue}>{match.homeScore}</Text>
+                            <Text style={styles.scoreDivider}>x</Text>
+                            <Text style={styles.scoreValue}>{match.awayScore}</Text>
                           </View>
-                          <Text style={styles.scoreNumber}>{match.homeScore}</Text>
-                          <Text style={styles.scoreDivider}>x</Text>
-                          <Text style={styles.scoreNumber}>{match.awayScore}</Text>
-                          <View style={[styles.teamBlock, styles.teamBlockRight]}>
-                            <Text style={styles.teamNameRight}>{match.awayTeam}</Text>
-                            {renderTeamBadge(match.awayTeam)}
-                          </View>
+                          <TeamBlock
+                            align="right"
+                            logo={<TeamBadge source={getTeamBadgeSource(match.awayTeam, match.awayTeamCrest)} />}
+                            name={match.awayTeam}
+                          />
                         </View>
-                        <Text style={styles.venueText}>{match.venue}</Text>
-                      </View>
+
+                        <View style={styles.venueRow}>
+                          <MaterialIcons name="place" size={14} color={ChapeTheme.colors.textSubtle} />
+                          <Text style={styles.venueText}>{match.venue}</Text>
+                        </View>
+                      </AnimatedEnter>
                     );
                   })
                 ) : (
-                  <View style={styles.emptyMatchesCard}>
-                    <MaterialIcons name="event-busy" size={26} color="#f5f5f0" />
-                    <Text style={styles.feedbackText}>Nenhum jogo encontrado para a Chape nesse período.</Text>
-                  </View>
+                  <AnimatedEnter delay={150}>
+                    <StateCard
+                      icon="event-busy"
+                      title="Nenhum jogo encontrado"
+                      description="Não apareceu nenhuma partida da Chape neste recorte de calendário."
+                    />
+                  </AnimatedEnter>
                 )}
               </View>
 
-              <View style={styles.tableHeader}>
-                <Text style={styles.tableTitle}>{data?.competition ?? "Campeonato"}</Text>
-                <MaterialIcons name="arrow-forward" size={18} color="#f5f5f0" />
-              </View>
+              <AnimatedEnter delay={320} style={styles.sectionHeader}>
+                <Text style={styles.sectionEyebrow}>Tabela</Text>
+                <Text style={styles.sectionTitle}>Classificação resumida</Text>
+              </AnimatedEnter>
 
-              <Text style={styles.updatedAt}>
-                Atualizado em {new Date(data?.updatedAt ?? "").toLocaleString("pt-BR")}
-              </Text>
-
-              <View style={styles.tableCard}>
-                <View style={styles.tableTopRow}>
-                  <Text style={[styles.tableTopText, styles.colTeam]}>Classificacao</Text>
-                  <Text style={[styles.tableTopText, styles.colPts]}>P</Text>
-                  <Text style={[styles.tableTopText, styles.colGames]}>J</Text>
+              <AnimatedEnter delay={360} style={styles.tableCard}>
+                <View style={styles.tableHeaderRow}>
+                  <Text style={[styles.tableHeaderText, styles.colPosition]}>Pos</Text>
+                  <Text style={[styles.tableHeaderText, styles.colTeam]}>Equipe</Text>
+                  <Text style={[styles.tableHeaderText, styles.colTrend]}>F</Text>
+                  <Text style={[styles.tableHeaderText, styles.colPoints]}>P</Text>
+                  <Text style={[styles.tableHeaderText, styles.colGames]}>J</Text>
                 </View>
 
                 {standings.map((item) => (
-                  <View
+                  <StandingRow
                     key={`${item.position}-${item.team}`}
-                    style={[styles.row, item.team === "Chapecoense" && styles.rowHighlight]}
-                  >
-                    <Text style={styles.position}>{item.position}</Text>
-                    <Text style={styles.team}>{item.team}</Text>
-                    {renderFormIcon(item.form)}
-                    <Text style={styles.points}>{item.points}</Text>
-                    <Text style={styles.games}>{item.games}</Text>
-                  </View>
-                ))}
-              </View>
+                    item={item}
+                    highlight={isChapeTeam(item.team)}
+                    trendIcon={renderFormIcon(item.form)}
+                    />
+                  ))}
+              </AnimatedEnter>
             </>
           ) : null}
         </ScrollView>
@@ -232,287 +292,434 @@ export default function JogosScreen() {
   );
 }
 
+function TeamBlock({
+  align,
+  logo,
+  name,
+}: {
+  align: "left" | "right";
+  logo: React.ReactNode;
+  name: string;
+}) {
+  return (
+    <View style={[styles.teamBlock, align === "right" && styles.teamBlockRight]}>
+      {align === "left" ? logo : null}
+      <Text style={[styles.teamName, align === "right" && styles.teamNameRight]}>{name}</Text>
+      {align === "right" ? logo : null}
+    </View>
+  );
+}
+
+function TeamBadge({ source }: { source: ImageSourcePropType | null }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!source || failed) {
+    return (
+      <View style={styles.opponentBadge}>
+        <MaterialIcons name="sports-soccer" size={14} color={ChapeTheme.colors.textSubtle} />
+      </View>
+    );
+  }
+
+  return <Image source={source} style={styles.teamLogo} onError={() => setFailed(true)} />;
+}
+
+function StandingRow({
+  item,
+  highlight,
+  trendIcon,
+}: {
+  item: Standing;
+  highlight: boolean;
+  trendIcon: React.ReactNode;
+}) {
+  return (
+    <View style={[styles.tableRow, highlight && styles.tableRowHighlight]}>
+      <Text style={[styles.tableCell, styles.colPosition]}>{item.position}</Text>
+      <Text style={[styles.tableCell, styles.colTeam, highlight && styles.teamHighlight]}>{item.team}</Text>
+      <View style={[styles.colTrend, styles.trendWrap]}>{trendIcon}</View>
+      <Text style={[styles.tableCell, styles.colPoints]}>{item.points}</Text>
+      <Text style={[styles.tableCell, styles.colGames]}>{item.games}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#073b1a",
+    backgroundColor: ChapeTheme.colors.page,
   },
   background: {
     flex: 1,
   },
-  backgroundImage: {
-    opacity: 0.2,
+  bgImage: {
+    opacity: 0.1,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4, 42, 18, 0.86)",
+    backgroundColor: ChapeTheme.colors.overlay,
+  },
+  orb: {
+    position: "absolute",
+    borderRadius: 999,
+  },
+  orbTop: {
+    width: 240,
+    height: 240,
+    top: -70,
+    right: -46,
+    backgroundColor: "rgba(123, 216, 255, 0.08)",
+  },
+  orbBottom: {
+    width: 300,
+    height: 300,
+    bottom: 70,
+    left: -150,
+    backgroundColor: "rgba(215, 240, 106, 0.07)",
   },
   content: {
-    paddingBottom: 44,
+    paddingTop: 26,
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
-  headerBar: {
-    marginTop: 46,
-    marginHorizontal: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  profilePill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    padding: 8,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(247, 245, 235, 0.92)",
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: ChapeTheme.colors.primary,
+  },
+  profileEyebrow: {
+    fontSize: 11,
+    color: ChapeTheme.colors.textSubtle,
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+  },
+  profileName: {
+    marginTop: 2,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#102015",
+  },
+  heroCard: {
+    marginTop: 20,
+    padding: 24,
+    borderRadius: ChapeTheme.radii.lg,
+    backgroundColor: "rgba(13, 48, 28, 0.86)",
+    borderWidth: 1,
+    borderColor: ChapeTheme.colors.borderStrong,
+    ...ChapeTheme.shadow,
+  },
+  heroEyebrow: {
+    color: ChapeTheme.colors.gold,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+  },
+  heroTitle: {
+    marginTop: 10,
+    color: ChapeTheme.colors.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800",
+  },
+  heroSubtitle: {
+    marginTop: 10,
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  summaryRow: {
+    marginTop: 22,
     flexDirection: "row",
     gap: 10,
   },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: "#0c5a2a",
+  stackColumn: {
+    flexDirection: "column",
   },
-  profileName: {
-    fontSize: 14,
+  summaryCard: {
+    flex: 1,
+    minHeight: 96,
+    padding: 14,
+    borderRadius: ChapeTheme.radii.sm,
+    backgroundColor: "rgba(247, 245, 235, 0.06)",
+    justifyContent: "space-between",
+  },
+  fullWidthCard: {
+    width: "100%",
+    flex: 0,
+  },
+  summaryValue: {
+    color: ChapeTheme.colors.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  summaryLabel: {
+    color: ChapeTheme.colors.textSubtle,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  updatedPill: {
+    alignSelf: "flex-start",
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(247, 245, 235, 0.06)",
+  },
+  updatedText: {
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#14381f",
   },
   feedbackCard: {
-    marginTop: 44,
-    marginHorizontal: 24,
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    marginTop: 20,
+    padding: 24,
+    borderRadius: ChapeTheme.radii.md,
+    backgroundColor: ChapeTheme.colors.surfaceMuted,
     alignItems: "center",
     gap: 12,
   },
   feedbackText: {
-    color: "#f5f5f0",
+    color: ChapeTheme.colors.text,
     fontSize: 14,
     textAlign: "center",
   },
   retryButton: {
-    marginTop: 8,
-    backgroundColor: "#f5f5f0",
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    marginTop: 4,
+    backgroundColor: ChapeTheme.colors.accent,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: ChapeTheme.radii.pill,
   },
   retryText: {
-    color: "#14381f",
+    color: "#102015",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     textTransform: "uppercase",
+    letterSpacing: 0.7,
   },
-  scoresRow: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  sectionHeader: {
+    marginTop: 28,
+    marginBottom: 14,
+  },
+  sectionEyebrow: {
+    color: ChapeTheme.colors.gold,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+  },
+  sectionTitle: {
+    marginTop: 6,
+    color: ChapeTheme.colors.text,
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  matchesColumn: {
     gap: 12,
   },
-  scoreCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.97)",
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+  matchCard: {
+    padding: 18,
+    borderRadius: ChapeTheme.radii.md,
+    backgroundColor: "rgba(8, 28, 17, 0.88)",
     borderWidth: 1,
-    borderColor: "rgba(12, 90, 42, 0.08)",
+    borderColor: ChapeTheme.colors.border,
   },
-  scoreCardLive: {
-    borderColor: "rgba(12, 90, 42, 0.45)",
-    shadowColor: "#0c5a2a",
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+  matchCardLive: {
+    borderColor: "rgba(99, 212, 130, 0.5)",
+    backgroundColor: "rgba(11, 41, 24, 0.96)",
   },
-  scoreCardUpcoming: {
-    backgroundColor: "rgba(236, 244, 237, 0.98)",
+  matchCardUpcoming: {
+    backgroundColor: "rgba(16, 52, 31, 0.92)",
   },
-  matchMeta: {
+  matchHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
   },
   matchBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "#eaf1eb",
+    paddingVertical: 6,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(247, 245, 235, 0.08)",
   },
   matchBadgeLive: {
-    backgroundColor: "#0c5a2a",
+    backgroundColor: "rgba(99, 212, 130, 0.16)",
   },
   matchBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "800",
-    color: "#0c5a2a",
+    color: ChapeTheme.colors.accentSoft,
     textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
   matchBadgeTextLive: {
-    color: "#f5f5f0",
-  },
-  matchStatus: {
-    marginTop: 10,
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#566056",
+    color: "#d9ffe6",
   },
   matchTime: {
-    fontSize: 11,
-    color: "#566056",
+    color: ChapeTheme.colors.textSubtle,
+    fontSize: 12,
+    fontWeight: "600",
   },
-  scoreLine: {
-    marginTop: 10,
+  matchStatus: {
+    marginTop: 12,
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  matchScoreRow: {
+    marginTop: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 6,
+    gap: 12,
   },
   teamBlock: {
     flex: 1,
-    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   teamBlockRight: {
-    justifyContent: "flex-end",
+    alignItems: "center",
   },
   teamLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#d4ddd2",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
+    borderColor: ChapeTheme.colors.borderStrong,
   },
   opponentBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#d4ddd2",
-    backgroundColor: "#f2f5f2",
+    borderColor: ChapeTheme.colors.border,
+    backgroundColor: "rgba(247, 245, 235, 0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
   teamName: {
-    flexShrink: 1,
-    fontSize: 12,
+    color: ChapeTheme.colors.text,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "700",
-    color: "#253225",
+    textAlign: "center",
   },
   teamNameRight: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#253225",
-    textAlign: "right",
+    textAlign: "center",
   },
-  scoreNumber: {
-    fontSize: 30,
+  scoreCenter: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+  },
+  scoreValue: {
+    color: ChapeTheme.colors.text,
+    fontSize: 34,
+    lineHeight: 38,
     fontWeight: "800",
-    color: "#202420",
-    lineHeight: 34,
   },
   scoreDivider: {
-    fontSize: 16,
+    color: ChapeTheme.colors.textSubtle,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#566056",
+  },
+  venueRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   venueText: {
-    marginTop: 8,
-    fontSize: 11,
-    color: "#566056",
+    color: ChapeTheme.colors.textSubtle,
+    fontSize: 12,
   },
   emptyMatchesCard: {
-    paddingVertical: 26,
-    paddingHorizontal: 20,
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    padding: 24,
+    borderRadius: ChapeTheme.radii.md,
+    backgroundColor: "rgba(247, 245, 235, 0.06)",
     alignItems: "center",
     gap: 10,
   },
-  tableHeader: {
-    marginTop: 24,
-    paddingHorizontal: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  tableTitle: {
-    fontSize: 34,
-    fontWeight: "700",
-    color: "#f5f5f0",
-  },
-  updatedAt: {
-    marginTop: 6,
-    paddingHorizontal: 40,
-    color: "#cfe0d0",
-    fontSize: 11,
-  },
   tableCard: {
-    marginTop: 10,
-    marginHorizontal: 32,
-    backgroundColor: "rgba(245, 245, 245, 0.96)",
-    borderRadius: 16,
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 9,
+    padding: 16,
+    borderRadius: ChapeTheme.radii.lg,
+    backgroundColor: "rgba(247, 245, 235, 0.94)",
+    ...ChapeTheme.shadow,
   },
-  tableTopRow: {
+  tableHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e2e2",
-    paddingBottom: 5,
-    marginBottom: 4,
+    borderBottomColor: "rgba(16, 32, 21, 0.08)",
   },
-  tableTopText: {
-    fontSize: 8,
-    color: "#909890",
+  tableHeaderText: {
+    color: "#738174",
+    fontSize: 11,
+    fontWeight: "800",
     textTransform: "uppercase",
+    letterSpacing: 0.7,
   },
-  row: {
+  tableRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 5.5,
+    minHeight: 46,
     borderBottomWidth: 1,
-    borderBottomColor: "#ececec",
+    borderBottomColor: "rgba(16, 32, 21, 0.06)",
   },
-  rowHighlight: {
-    backgroundColor: "rgba(43, 159, 75, 0.18)",
-    borderRadius: 6,
+  tableRowHighlight: {
+    backgroundColor: "rgba(20, 83, 45, 0.08)",
+    borderRadius: 12,
+    paddingHorizontal: 6,
   },
-  position: {
-    width: 18,
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#7a7a7a",
-    textAlign: "center",
-  },
-  team: {
-    flex: 1,
-    fontSize: 10,
+  tableCell: {
+    color: "#102015",
+    fontSize: 13,
     fontWeight: "600",
-    color: "#253225",
   },
-  points: {
-    width: 22,
-    fontSize: 10,
-    color: "#374237",
-    textAlign: "center",
+  teamHighlight: {
+    color: ChapeTheme.colors.primaryBright,
+    fontWeight: "800",
   },
-  games: {
-    width: 22,
-    fontSize: 10,
-    color: "#374237",
+  trendWrap: {
+    alignItems: "center",
+  },
+  colPosition: {
+    width: 34,
     textAlign: "center",
   },
   colTeam: {
     flex: 1,
   },
-  colPts: {
-    width: 22,
+  colTrend: {
+    width: 32,
+  },
+  colPoints: {
+    width: 34,
     textAlign: "center",
   },
   colGames: {
-    width: 22,
+    width: 34,
     textAlign: "center",
   },
 });

@@ -12,7 +12,9 @@ type StandingForm = "up" | "down" | "stable";
 type FeaturedMatch = {
   id: string;
   homeTeam: string;
+  homeTeamCrest: string | null;
   awayTeam: string;
+  awayTeamCrest: string | null;
   homeScore: number;
   awayScore: number;
   status: string;
@@ -34,10 +36,28 @@ type JogosOverviewResponse = {
   }[];
 };
 
-const OVERVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
+type MatchesCacheValue = {
+  competition: string;
+  featuredMatches: Omit<FeaturedMatch, "sortKey">[];
+  updatedAt: string;
+};
 
-let overviewCache: {
-  data: JogosOverviewResponse;
+type StandingsCacheValue = {
+  competition: string;
+  standings: JogosOverviewResponse["standings"];
+  updatedAt: string;
+};
+
+const MATCHES_CACHE_TTL_MS = 60 * 60 * 1000;
+const STANDINGS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+let matchesCache: {
+  data: MatchesCacheValue;
+  expiresAt: number;
+} | null = null;
+
+let standingsCache: {
+  data: StandingsCacheValue;
   expiresAt: number;
 } | null = null;
 
@@ -154,7 +174,9 @@ function toFeaturedMatch(match: JsonRecord): FeaturedMatch {
   return {
     id: String(id),
     homeTeam: toStringValue(homeTeam?.shortName) ?? toStringValue(homeTeam?.name) ?? "Mandante",
+    homeTeamCrest: toStringValue(homeTeam?.crest),
     awayTeam: toStringValue(awayTeam?.shortName) ?? toStringValue(awayTeam?.name) ?? "Visitante",
+    awayTeamCrest: toStringValue(awayTeam?.crest),
     homeScore: toNumberValue(fullTime?.home) ?? 0,
     awayScore: toNumberValue(fullTime?.away) ?? 0,
     status: getMatchStatus(toStringValue(match.status)),
@@ -246,45 +268,120 @@ function buildMatchesPath() {
   return `/competitions/${env.footballDataCompetitionCode}/matches?dateFrom=${from}&dateTo=${to}`;
 }
 
-async function buildOverview(): Promise<JogosOverviewResponse> {
-  const [standingsPayload, matchesPayload] = await Promise.all([
-    fetchFootballData(`/competitions/${env.footballDataCompetitionCode}/standings`),
-    fetchFootballData(buildMatchesPath()),
-  ]);
-
+async function loadMatchesData(): Promise<MatchesCacheValue> {
+  const matchesPayload = await fetchFootballData(buildMatchesPath());
   const matchesRecord = toRecord(matchesPayload);
-  const competitionRecord = toRecord(standingsPayload);
   const matches = toArray(matchesRecord?.matches)
     .map((entry) => toRecord(entry))
     .filter((entry): entry is JsonRecord => entry !== null);
+  const competitionRecord = toRecord(matchesRecord?.competition);
   const aliases = getTeamAliases(env.footballDataTeamName);
 
   return {
-    competition: toStringValue(competitionRecord?.name) ?? "Campeonato Brasileiro Série B",
-    updatedAt: new Date().toISOString(),
+    competition: toStringValue(competitionRecord?.name) ?? "Campeonato Brasileiro Série A",
     featuredMatches: buildFeaturedMatches(matches, aliases),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function loadStandingsData(): Promise<StandingsCacheValue> {
+  const standingsPayload = await fetchFootballData(`/competitions/${env.footballDataCompetitionCode}/standings`);
+  const competitionRecord = toRecord(standingsPayload);
+
+  return {
+    competition: toStringValue(competitionRecord?.name) ?? "Campeonato Brasileiro Série A",
     standings: buildStandings(standingsPayload),
+    updatedAt: new Date().toISOString(),
   };
 }
 
 jogosRouter.get("/overview", requireAuth, async (_req, res) => {
   const now = Date.now();
+  const matchesCacheValid = matchesCache && matchesCache.expiresAt > now;
+  const standingsCacheValid = standingsCache && standingsCache.expiresAt > now;
 
-  if (overviewCache && overviewCache.expiresAt > now) {
-    return res.json(overviewCache.data);
+  if (matchesCacheValid && standingsCacheValid && matchesCache && standingsCache) {
+    const cachedMatches = matchesCache.data;
+    const cachedStandings = standingsCache.data;
+
+    return res.json({
+      competition: cachedMatches.competition || cachedStandings.competition,
+      updatedAt:
+        new Date(cachedMatches.updatedAt) > new Date(cachedStandings.updatedAt)
+          ? cachedMatches.updatedAt
+          : cachedStandings.updatedAt,
+      featuredMatches: cachedMatches.featuredMatches,
+      standings: cachedStandings.standings,
+    });
   }
 
   try {
-    const overview = await buildOverview();
-    overviewCache = {
-      data: overview,
-      expiresAt: now + OVERVIEW_CACHE_TTL_MS,
-    };
+    let matchesData = matchesCache?.data ?? null;
+    let standingsData = standingsCache?.data ?? null;
 
-    return res.json(overview);
+    if (!matchesCacheValid) {
+      try {
+        matchesData = await loadMatchesData();
+        matchesCache = {
+          data: matchesData,
+          expiresAt: now + MATCHES_CACHE_TTL_MS,
+        };
+      } catch (error) {
+        if (!(error instanceof FootballDataError && error.status === 429 && matchesCache?.data)) {
+          throw error;
+        }
+      }
+    }
+
+    if (!standingsCacheValid) {
+      try {
+        standingsData = await loadStandingsData();
+        standingsCache = {
+          data: standingsData,
+          expiresAt: now + STANDINGS_CACHE_TTL_MS,
+        };
+      } catch (error) {
+        if (!(error instanceof FootballDataError && error.status === 429 && standingsCache?.data)) {
+          throw error;
+        }
+      }
+    }
+
+    if (!matchesData && matchesCache?.data) {
+      matchesData = matchesCache.data;
+    }
+
+    if (!standingsData && standingsCache?.data) {
+      standingsData = standingsCache.data;
+    }
+
+    if (!matchesData || !standingsData) {
+      throw new Error("Nao foi possivel carregar os dados de jogos e tabela no momento.");
+    }
+
+    return res.json({
+      competition: matchesData.competition || standingsData.competition,
+      updatedAt:
+        new Date(matchesData.updatedAt) > new Date(standingsData.updatedAt)
+          ? matchesData.updatedAt
+          : standingsData.updatedAt,
+      featuredMatches: matchesData.featuredMatches,
+      standings: standingsData.standings,
+    });
   } catch (error) {
-    if (error instanceof FootballDataError && error.status === 429 && overviewCache) {
-      return res.json(overviewCache.data);
+    const cachedMatches = matchesCache?.data ?? null;
+    const cachedStandings = standingsCache?.data ?? null;
+
+    if (cachedMatches && cachedStandings) {
+      return res.json({
+        competition: cachedMatches.competition || cachedStandings.competition,
+        updatedAt:
+          new Date(cachedMatches.updatedAt) > new Date(cachedStandings.updatedAt)
+            ? cachedMatches.updatedAt
+            : cachedStandings.updatedAt,
+        featuredMatches: cachedMatches.featuredMatches,
+        standings: cachedStandings.standings,
+      });
     }
 
     const message = error instanceof Error ? error.message : "Falha ao carregar jogos";

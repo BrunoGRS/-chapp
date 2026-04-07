@@ -1,3 +1,6 @@
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+
 export class ApiError extends Error {
   status: number;
 
@@ -9,7 +12,45 @@ export class ApiError extends Error {
 }
 
 const rawApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
-const apiBaseUrl = rawApiBaseUrl.replace(/\/$/, "");
+
+function resolveApiBaseUrl(baseUrl: string) {
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  if (!normalizedBaseUrl) {
+    return "";
+  }
+
+  if (Platform.OS === "web") {
+    return normalizedBaseUrl;
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedBaseUrl);
+    const isLocalhost = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
+
+    if (!isLocalhost) {
+      return parsedUrl.toString().replace(/\/$/, "");
+    }
+
+    const hostUri = Constants.expoConfig?.hostUri;
+    const devHost = hostUri?.split(":")[0];
+
+    if (devHost && devHost !== "localhost" && devHost !== "127.0.0.1") {
+      parsedUrl.hostname = devHost;
+      return parsedUrl.toString().replace(/\/$/, "");
+    }
+
+    if (Platform.OS === "android") {
+      parsedUrl.hostname = "10.0.2.2";
+      return parsedUrl.toString().replace(/\/$/, "");
+    }
+  } catch {
+    return normalizedBaseUrl;
+  }
+
+  return normalizedBaseUrl;
+}
+
+const apiBaseUrl = resolveApiBaseUrl(rawApiBaseUrl);
 
 let authToken: string | null = null;
 
