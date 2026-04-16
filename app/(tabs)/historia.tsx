@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { getHistoriaOverview } from "@/services/historia.service";
 import type { HistoriaOverview } from "@/types/historia";
 
-const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const CHAPE_BADGE = require("../../assets/images/chape_badge_official.png");
 const USER_AVATAR = require("../../assets/images/personagem.png");
 
 export default function HistoriaScreen() {

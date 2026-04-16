@@ -4,6 +4,8 @@ export type MatchPerspective = "home" | "away";
 
 export type FeaturedMatch = {
   id: string;
+  competitionName: string;
+  competitionCode?: string | null;
   homeTeam: string;
   homeTeamCrest?: string | null;
   awayTeam: string;
@@ -29,6 +31,8 @@ export type Standing = {
 
 export type RecentResult = {
   id: string;
+  competitionName: string;
+  competitionCode?: string | null;
   opponent: string;
   opponentCrest?: string | null;
   perspective: MatchPerspective;

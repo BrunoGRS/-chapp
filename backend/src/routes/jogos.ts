@@ -11,9 +11,16 @@ type StandingForm = "up" | "down" | "stable";
 type RecentForm = "W" | "D" | "L";
 type MatchPerspective = "home" | "away";
 type TeamRecentForms = Record<string, RecentForm[]>;
+type ResolvedTeam = {
+  id: number;
+  name: string;
+};
+type TeamVenueCache = Map<number, string>;
 
 type FeaturedMatch = {
   id: string;
+  competitionName: string;
+  competitionCode: string | null;
   homeTeam: string;
   homeTeamCrest: string | null;
   awayTeam: string;
@@ -28,6 +35,8 @@ type FeaturedMatch = {
 
 type RecentResult = {
   id: string;
+  competitionName: string;
+  competitionCode: string | null;
   opponent: string;
   opponentCrest: string | null;
   perspective: MatchPerspective;
@@ -62,7 +71,7 @@ type MatchesCacheValue = {
   competition: string;
   featuredMatches: Omit<FeaturedMatch, "sortKey">[];
   recentResults: Omit<RecentResult, "sortKey">[];
-  teamRecentForms: TeamRecentForms;
+  standingsRecentForms: TeamRecentForms;
   updatedAt: string;
 };
 
@@ -78,6 +87,7 @@ type StandingsCacheValue = {
 
 const MATCHES_CACHE_TTL_MS = 60 * 60 * 1000;
 const STANDINGS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const DEFAULT_SEASON = new Date().getFullYear();
 
 let matchesCache: {
   data: MatchesCacheValue;
@@ -88,6 +98,13 @@ let standingsCache: {
   data: StandingsCacheValue;
   expiresAt: number;
 } | null = null;
+
+let resolvedTeamCache: {
+  data: ResolvedTeam;
+  expiresAt: number;
+} | null = null;
+
+const teamVenueCache: TeamVenueCache = new Map();
 
 function toRecord(value: unknown): JsonRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -154,6 +171,10 @@ function getTeamKey(team: JsonRecord | null): string | null {
   return `name:${normalizeText(teamName)}`;
 }
 
+function getTeamId(team: JsonRecord | null): number | null {
+  return toNumberValue(team?.id);
+}
+
 function filterTargetMatches(matches: JsonRecord[], aliases: string[]) {
   return matches.filter((match) => {
     const homeTeam = toRecord(match.homeTeam);
@@ -163,6 +184,24 @@ function filterTargetMatches(matches: JsonRecord[], aliases: string[]) {
 
     return isTargetTeam(homeName, aliases) || isTargetTeam(awayName, aliases);
   });
+}
+
+function findTargetTeam(teams: JsonRecord[], aliases: string[]): ResolvedTeam | null {
+  for (const team of teams) {
+    const teamName = toStringValue(team.name) ?? "";
+    const teamId = toNumberValue(team.id);
+
+    if (!teamId || !isTargetTeam(teamName, aliases)) {
+      continue;
+    }
+
+    return {
+      id: teamId,
+      name: teamName,
+    };
+  }
+
+  return null;
 }
 
 function formatMatchTime(date: Date | null): string {
@@ -196,6 +235,73 @@ function getMatchStatus(status: string | null): string {
     default:
       return status ?? "Agendado";
   }
+}
+
+function getCompetitionSummary(match: JsonRecord) {
+  const competition = toRecord(match.competition);
+
+  return {
+    competitionName: toStringValue(competition?.name) ?? "Competição indefinida",
+    competitionCode: toStringValue(competition?.code),
+  };
+}
+
+async function fetchTeamVenue(teamId: number): Promise<string | null> {
+  if (teamVenueCache.has(teamId)) {
+    return teamVenueCache.get(teamId) ?? null;
+  }
+
+  try {
+    const teamPayload = await fetchFootballData(`/teams/${teamId}`);
+    const teamRecord = toRecord(teamPayload);
+    const venue = toStringValue(teamRecord?.venue);
+
+    if (venue) {
+      teamVenueCache.set(teamId, venue);
+      return venue;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+async function enrichMatchesWithVenue(matches: JsonRecord[]) {
+  const homeTeamIds = [
+    ...new Set(
+      matches
+        .filter((match) => !toStringValue(match.venue))
+        .map((match) => getTeamId(toRecord(match.homeTeam)))
+        .filter((teamId): teamId is number => teamId !== null)
+    ),
+  ];
+
+  if (!homeTeamIds.length) {
+    return matches;
+  }
+
+  await Promise.all(homeTeamIds.map((teamId) => fetchTeamVenue(teamId)));
+
+  return matches.map((match) => {
+    const currentVenue = toStringValue(match.venue);
+
+    if (currentVenue) {
+      return match;
+    }
+
+    const homeTeamId = getTeamId(toRecord(match.homeTeam));
+    const fallbackVenue = homeTeamId ? teamVenueCache.get(homeTeamId) ?? null : null;
+
+    if (!fallbackVenue) {
+      return match;
+    }
+
+    return {
+      ...match,
+      venue: fallbackVenue,
+    };
+  });
 }
 
 function parseFormTrend(form: unknown): StandingForm {
@@ -252,12 +358,15 @@ function toFeaturedMatch(match: JsonRecord): FeaturedMatch {
   const awayTeam = toRecord(match.awayTeam);
   const score = toRecord(match.score);
   const fullTime = toRecord(score?.fullTime);
+  const competition = getCompetitionSummary(match);
   const utcDate = toStringValue(match.utcDate);
   const parsedDate = utcDate ? new Date(utcDate) : null;
   const id = toNumberValue(match.id) ?? `${toStringValue(homeTeam?.name) ?? "home"}-${toStringValue(awayTeam?.name) ?? "away"}-${utcDate ?? "sem-data"}`;
 
   return {
     id: String(id),
+    competitionName: competition.competitionName,
+    competitionCode: competition.competitionCode,
     homeTeam: toStringValue(homeTeam?.shortName) ?? toStringValue(homeTeam?.name) ?? "Mandante",
     homeTeamCrest: toStringValue(homeTeam?.crest),
     awayTeam: toStringValue(awayTeam?.shortName) ?? toStringValue(awayTeam?.name) ?? "Visitante",
@@ -311,6 +420,7 @@ function toRecentResult(match: JsonRecord, aliases: string[]): RecentResult | nu
   const awayTeam = toRecord(match.awayTeam);
   const score = toRecord(match.score);
   const fullTime = toRecord(score?.fullTime);
+  const competition = getCompetitionSummary(match);
   const utcDate = toStringValue(match.utcDate);
   const parsedDate = utcDate ? new Date(utcDate) : null;
   const homeScore = toNumberValue(fullTime?.home) ?? 0;
@@ -325,6 +435,8 @@ function toRecentResult(match: JsonRecord, aliases: string[]): RecentResult | nu
 
   return {
     id: String(id),
+    competitionName: competition.competitionName,
+    competitionCode: competition.competitionCode,
     opponent: toStringValue(opponentTeam?.shortName) ?? toStringValue(opponentTeam?.name) ?? "Adversário",
     opponentCrest: toStringValue(opponentTeam?.crest),
     perspective,
@@ -473,40 +585,88 @@ function resolveStandings(standings: CachedStanding[], teamRecentForms: TeamRece
 }
 
 function buildMatchesPath() {
-  const now = new Date();
-  const dateFrom = new Date(now);
-  const dateTo = new Date(now);
+  return `/competitions/${env.footballDataCompetitionCode}/matches?season=${DEFAULT_SEASON}`;
+}
 
-  dateFrom.setDate(dateFrom.getDate() - 180);
-  dateTo.setDate(dateTo.getDate() + 180);
+async function resolveTargetTeam(aliases: string[]): Promise<ResolvedTeam> {
+  const now = Date.now();
 
-  const from = dateFrom.toISOString().slice(0, 10);
-  const to = dateTo.toISOString().slice(0, 10);
+  if (resolvedTeamCache && resolvedTeamCache.expiresAt > now) {
+    return resolvedTeamCache.data;
+  }
 
-  return `/competitions/${env.footballDataCompetitionCode}/matches?dateFrom=${from}&dateTo=${to}`;
+  const teamsPayload = await fetchFootballData(
+    `/competitions/${env.footballDataCompetitionCode}/teams?season=${DEFAULT_SEASON}`
+  );
+  const teamsRecord = toRecord(teamsPayload);
+  const teams = toArray(teamsRecord?.teams)
+    .map((entry) => toRecord(entry))
+    .filter((entry): entry is JsonRecord => entry !== null);
+
+  const resolvedTeam = findTargetTeam(teams, aliases);
+
+  if (!resolvedTeam) {
+    throw new Error("Nao foi possivel localizar a Chapecoense na competicao configurada para consultar os jogos.");
+  }
+
+  resolvedTeamCache = {
+    data: resolvedTeam,
+    expiresAt: now + MATCHES_CACHE_TTL_MS,
+  };
+
+  return resolvedTeam;
+}
+
+async function loadTeamMatches(aliases: string[]) {
+  const resolvedTeam = await resolveTargetTeam(aliases);
+  const teamMatchesPayload = await fetchFootballData(`/teams/${resolvedTeam.id}/matches?season=${DEFAULT_SEASON}`);
+  const teamMatchesRecord = toRecord(teamMatchesPayload);
+
+  return toArray(teamMatchesRecord?.matches)
+    .map((entry) => toRecord(entry))
+    .filter((entry): entry is JsonRecord => entry !== null);
+}
+
+async function loadCompetitionMatches() {
+  const matchesPayload = await fetchFootballData(buildMatchesPath());
+  const matchesRecord = toRecord(matchesPayload);
+  const competitionRecord = toRecord(matchesRecord?.competition);
+  const competitionMatches = toArray(matchesRecord?.matches)
+    .map((entry) => toRecord(entry))
+    .filter((entry): entry is JsonRecord => entry !== null);
+
+  return {
+    competitionName: toStringValue(competitionRecord?.name) ?? "Campeonato Brasileiro Série A",
+    matches: competitionMatches,
+  };
 }
 
 async function loadMatchesData(): Promise<MatchesCacheValue> {
-  const matchesPayload = await fetchFootballData(buildMatchesPath());
-  const matchesRecord = toRecord(matchesPayload);
-  const matches = toArray(matchesRecord?.matches)
-    .map((entry) => toRecord(entry))
-    .filter((entry): entry is JsonRecord => entry !== null);
-  const competitionRecord = toRecord(matchesRecord?.competition);
   const aliases = getTeamAliases(env.footballDataTeamName);
-  const filteredMatches = filterTargetMatches(matches, aliases);
+  const competitionMatchesData = await loadCompetitionMatches();
+  let featuredMatchesSource: JsonRecord[] = competitionMatchesData.matches;
+
+  try {
+    featuredMatchesSource = await loadTeamMatches(aliases);
+  } catch (error) {
+    if (!(error instanceof FootballDataError && (error.status === 401 || error.status === 403 || error.status === 404))) {
+      throw error;
+    }
+  }
+
+  const enrichedFeaturedMatchesSource = await enrichMatchesWithVenue(featuredMatchesSource);
 
   return {
-    competition: toStringValue(competitionRecord?.name) ?? "Campeonato Brasileiro Série A",
-    featuredMatches: buildFeaturedMatches(filteredMatches),
-    recentResults: buildRecentResults(filteredMatches, aliases),
-    teamRecentForms: buildTeamRecentForms(matches),
+    competition: competitionMatchesData.competitionName,
+    featuredMatches: buildFeaturedMatches(filterTargetMatches(enrichedFeaturedMatchesSource, aliases)),
+    recentResults: buildRecentResults(filterTargetMatches(enrichedFeaturedMatchesSource, aliases), aliases),
+    standingsRecentForms: buildTeamRecentForms(competitionMatchesData.matches),
     updatedAt: new Date().toISOString(),
   };
 }
 
 async function loadStandingsData(): Promise<StandingsCacheValue> {
-  const standingsPayload = await fetchFootballData(`/competitions/${env.footballDataCompetitionCode}/standings`);
+  const standingsPayload = await fetchFootballData(`/competitions/${env.footballDataCompetitionCode}/standings?season=${DEFAULT_SEASON}`);
   const competitionRecord = toRecord(standingsPayload);
 
   return {
@@ -533,7 +693,7 @@ jogosRouter.get("/overview", requireAuth, async (_req, res) => {
           : cachedStandings.updatedAt,
       featuredMatches: cachedMatches.featuredMatches,
       recentResults: cachedMatches.recentResults,
-      standings: resolveStandings(cachedStandings.standings, cachedMatches.teamRecentForms),
+      standings: resolveStandings(cachedStandings.standings, cachedMatches.standingsRecentForms),
     });
   }
 
@@ -589,7 +749,7 @@ jogosRouter.get("/overview", requireAuth, async (_req, res) => {
           : standingsData.updatedAt,
       featuredMatches: matchesData.featuredMatches,
       recentResults: matchesData.recentResults,
-      standings: resolveStandings(standingsData.standings, matchesData.teamRecentForms),
+      standings: resolveStandings(standingsData.standings, matchesData.standingsRecentForms),
     });
   } catch (error) {
     const cachedMatches = matchesCache?.data ?? null;
@@ -604,7 +764,7 @@ jogosRouter.get("/overview", requireAuth, async (_req, res) => {
             : cachedStandings.updatedAt,
         featuredMatches: cachedMatches.featuredMatches,
         recentResults: cachedMatches.recentResults,
-        standings: resolveStandings(cachedStandings.standings, cachedMatches.teamRecentForms),
+        standings: resolveStandings(cachedStandings.standings, cachedMatches.standingsRecentForms),
       });
     }
 

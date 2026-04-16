@@ -17,7 +17,7 @@ import {
 import { ChapeTheme } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 
-const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const CHAPE_BADGE = require("../../assets/images/chape_badge_official.png");
 const GOOGLE_BADGE = require("../../assets/images/logoGoole.png");
 
 export default function LoginScreen() {

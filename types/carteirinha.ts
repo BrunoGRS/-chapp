@@ -11,6 +11,7 @@ export type CarteirinhaOverview = {
   memberName: string;
   memberNumber: string;
   planName: string;
+  memberSince: string;
   validUntil: string;
   qrCode: string;
   actions: CarteirinhaActions;

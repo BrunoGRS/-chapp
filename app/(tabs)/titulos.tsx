@@ -22,7 +22,7 @@ import { ChapeTheme } from "@/constants/theme";
 import { getTitulosOverview } from "@/services/titulos.service";
 import type { TitulosOverview, Trophy } from "@/types/titulos";
 
-const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const CHAPE_BADGE = require("../../assets/images/chape_badge_official.png");
 const USER_AVATAR = require("../../assets/images/personagem.png");
 const TROPHY_IMAGES: Record<string, ImageSourcePropType> = {
   "sul-americana-2016": require("../../assets/images-titulos/copa-sul-americana-2016.webp"),

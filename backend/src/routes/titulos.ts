@@ -7,7 +7,7 @@ const titulosRouter = Router();
 const titulosOverview = {
   clubName: "Associação Chapecoense de Futebol",
   clubSubtitle: "O Furacão do Oeste",
-  updatedAt: "2026-03-19T00:40:00.000Z",
+  updatedAt: "2026-04-15T00:40:00.000Z",
   trophies: [
     {
       id: "sul-americana-2016",
@@ -17,18 +17,18 @@ const titulosOverview = {
       description: "Conquista continental que marcou a história do clube e do futebol sul-americano.",
     },
     {
-      id: "catarinense-2020",
-      title: "Campeonato Catarinense",
+      id: "serie-b-2020",
+      title: "Brasileiro Série B",
       year: "2020",
-      quote: "A nossa força vem da arquibancada.",
-      description: "Título estadual em campanha de retomada e afirmação da Chape em Santa Catarina.",
+      quote: "Do Oeste para o topo, com consistência e coragem.",
+      description: "Campanha que confirmou a Chapecoense como campeã da Série B e marcou o retorno do clube à elite nacional.",
     },
     {
-      id: "serie-b-2013",
-      title: "Brasileiro Série B",
-      year: "2013",
-      quote: "Do Oeste para o Brasil, com garra e coração.",
-      description: "Acesso nacional que consolidou o crescimento esportivo do clube.",
+      id: "catarinense-7-titulos",
+      title: "Campeonato Catarinense",
+      year: "7 títulos",
+      quote: "A nossa força vem da arquibancada.",
+      description: "A Chapecoense soma sete conquistas estaduais: 1977, 1996, 2007, 2011, 2016, 2017 e 2020.",
     },
   ],
 };

@@ -1,26 +1,51 @@
 import { Router } from "express";
 
+import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
 import type { AuthenticatedRequest } from "../types";
 
 const carteirinhaRouter = Router();
 
-carteirinhaRouter.get("/overview", requireAuth, (req: AuthenticatedRequest, res) => {
-  if (!req.user) {
+function formatMemberSince(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+}
+
+carteirinhaRouter.get("/overview", requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (!req.user?.id) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  const memberNumber = req.user.id.slice(0, 6).toUpperCase();
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      createdAt: true,
+    },
+  });
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const memberNumber = user.id.slice(0, 6).toUpperCase();
   const validUntil = "31/12/2026";
-  const qrCode = `CHAPP|${req.user.id}|${req.user.email}|${validUntil}`;
+  const qrCode = `CHAPP|${user.id}|${user.email}|${validUntil}`;
 
   return res.json({
-    updatedAt: "2026-03-19T01:35:00.000Z",
+    updatedAt: new Date().toISOString(),
     status: "Ativa",
     clubName: "Associação Chapecoense de Futebol",
-    memberName: req.user.name,
+    memberName: user.name,
     memberNumber,
     planName: "Sócio Torcedor",
+    memberSince: formatMemberSince(user.createdAt),
     validUntil,
     qrCode,
     actions: {

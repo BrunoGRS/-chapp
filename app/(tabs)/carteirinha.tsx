@@ -31,7 +31,7 @@ type CardPage = {
   side: CardSide;
 };
 
-const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const CHAPE_BADGE = require("../../assets/images/chape_badge_official.png");
 const USER_AVATAR = require("../../assets/images/personagem.png");
 const pages: CardPage[] = [
   { id: "frente", side: "front" },
@@ -125,9 +125,9 @@ export default function CarteirinhaScreen() {
     () => [
       { label: "status", value: data?.status ?? "Ativa" },
       { label: "plano", value: data?.planName ?? "Sócio Torcedor" },
-      { label: "validade", value: data?.validUntil ?? "--" },
+      { label: "sócio desde", value: data?.memberSince ?? "--" },
     ],
-    [data?.planName, data?.status, data?.validUntil]
+    [data?.memberSince, data?.planName, data?.status]
   );
   const slideWidth = width;
   const cardWidth = width - 48;
@@ -163,6 +163,9 @@ export default function CarteirinhaScreen() {
 
                 <Text style={[styles.memberLabel, styles.fieldSpacing]}>Validade</Text>
                 <Text style={styles.memberSmallValue}>{data.validUntil}</Text>
+
+                <Text style={[styles.memberLabel, styles.fieldSpacing]}>Sócio desde</Text>
+                <Text style={styles.memberSmallValue}>{data.memberSince}</Text>
               </View>
 
               <View style={styles.memberSideColumn}>

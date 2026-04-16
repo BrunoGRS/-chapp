@@ -24,7 +24,7 @@ import type { HistoriaOverview } from "@/types/historia";
 import type { JogosOverview } from "@/types/jogos";
 import type { TitulosOverview } from "@/types/titulos";
 
-const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const CHAPE_BADGE = require("../../assets/images/chape_badge_official.png");
 const USER_AVATAR = require("../../assets/images/personagem.png");
 
 type HomeData = {

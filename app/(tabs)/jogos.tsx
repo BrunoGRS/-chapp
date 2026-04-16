@@ -1,9 +1,10 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
   ImageBackground,
   ImageSourcePropType,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,7 +20,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { getJogosOverview } from "@/services/jogos.service";
 import type { FeaturedMatch, JogosOverview, RecentForm, Standing } from "@/types/jogos";
 
-const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
+const CHAPE_BADGE = require("../../assets/images/chape_badge_official.png");
 const USER_AVATAR = require("../../assets/images/personagem.png");
 
 export default function JogosScreen() {
@@ -29,12 +30,9 @@ export default function JogosScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedCompetitionFilter, setSelectedCompetitionFilter] = useState("all");
 
-  useEffect(() => {
-    void loadJogos();
-  }, []);
-
-  async function loadJogos(showRefreshing = false) {
+  const loadJogos = useCallback(async (showRefreshing = false) => {
     try {
       if (showRefreshing) {
         setRefreshing(true);
@@ -52,7 +50,11 @@ export default function JogosScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    void loadJogos();
+  }, [loadJogos]);
 
   function isChapeTeam(teamName: string) {
     const normalized = teamName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -99,11 +101,31 @@ export default function JogosScreen() {
     return null;
   }
 
-  const featuredMatches = data?.featuredMatches ?? [];
+  const featuredMatches = useMemo(() => data?.featuredMatches ?? [], [data?.featuredMatches]);
   const standings = data?.standings ?? [];
   const isCompact = width < 460;
-  const seasonLabel = data?.updatedAt ? new Date(data.updatedAt).getFullYear().toString() : "2026";
+  const seasonLabel = new Date(data?.updatedAt ?? Date.now()).getFullYear().toString();
   const leagueLabel = data?.competition ?? "Brasileirão Série A";
+  const competitionFilters = useMemo(() => {
+    const uniqueCompetitions = new Map<string, { key: string; label: string }>();
+
+    for (const match of featuredMatches) {
+      const key = match.competitionCode ?? match.competitionName;
+
+      if (!uniqueCompetitions.has(key)) {
+        uniqueCompetitions.set(key, {
+          key,
+          label: match.competitionName,
+        });
+      }
+    }
+
+    return [{ key: "all", label: "Todas" }, ...uniqueCompetitions.values()];
+  }, [featuredMatches]);
+  const filteredFeaturedMatches =
+    selectedCompetitionFilter === "all"
+      ? featuredMatches
+      : featuredMatches.filter((match) => (match.competitionCode ?? match.competitionName) === selectedCompetitionFilter);
 
   const chapeStanding = standings.find((item) => isChapeTeam(item.team));
   const standingsSummary = [
@@ -111,6 +133,12 @@ export default function JogosScreen() {
     { label: "jogos em foco", value: String(featuredMatches.length).padStart(2, "0") },
     { label: "posição atual", value: chapeStanding ? `${chapeStanding.position}º` : "--" },
   ];
+
+  useEffect(() => {
+    if (!competitionFilters.some((competition) => competition.key === selectedCompetitionFilter)) {
+      setSelectedCompetitionFilter("all");
+    }
+  }, [competitionFilters, selectedCompetitionFilter]);
 
   return (
     <View style={styles.root}>
@@ -191,9 +219,33 @@ export default function JogosScreen() {
                 <Text style={styles.sectionTitle}>Recorte mais importante do calendário</Text>
               </AnimatedEnter>
 
+              {competitionFilters.length > 1 ? (
+                <AnimatedEnter delay={135} style={styles.matchFiltersWrap}>
+                  {competitionFilters.map((competition) => (
+                    <Pressable
+                      key={competition.key}
+                      style={[
+                        styles.matchFilterChip,
+                        selectedCompetitionFilter === competition.key && styles.matchFilterChipActive,
+                      ]}
+                      onPress={() => setSelectedCompetitionFilter(competition.key)}
+                    >
+                      <Text
+                        style={[
+                          styles.matchFilterChipText,
+                          selectedCompetitionFilter === competition.key && styles.matchFilterChipTextActive,
+                        ]}
+                      >
+                        {competition.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </AnimatedEnter>
+              ) : null}
+
               <View style={styles.matchesColumn}>
-                {featuredMatches.length ? (
-                  featuredMatches.map((match, index) => {
+                {filteredFeaturedMatches.length ? (
+                  filteredFeaturedMatches.map((match, index) => {
                     const variant = getMatchVariant(match);
 
                     return (
@@ -213,6 +265,12 @@ export default function JogosScreen() {
                             </Text>
                           </View>
                           <Text style={styles.matchTime}>{match.matchTime}</Text>
+                        </View>
+
+                        <View style={styles.matchCompetitionRow}>
+                          <Text style={styles.matchCompetitionText}>
+                            {match.competitionCode ? `${match.competitionName} • ${match.competitionCode}` : match.competitionName}
+                          </Text>
                         </View>
 
                         <Text style={styles.matchStatus}>{match.status}</Text>
@@ -247,7 +305,7 @@ export default function JogosScreen() {
                     <StateCard
                       icon="event-busy"
                       title="Nenhum jogo encontrado"
-                      description="Não apareceu nenhuma partida da Chape neste recorte de calendário."
+                      description="Não apareceu nenhuma partida da Chape para a competição selecionada."
                     />
                   </AnimatedEnter>
                 )}
@@ -324,7 +382,6 @@ function TableFilter({ label, value }: { label: string; value: string }) {
         <Text numberOfLines={1} style={styles.tableFilterValue}>
           {value}
         </Text>
-        <MaterialIcons name="arrow-drop-down" size={18} color={ChapeTheme.colors.textMuted} />
       </View>
     </View>
   );
@@ -615,6 +672,34 @@ const styles = StyleSheet.create({
   matchesColumn: {
     gap: 12,
   },
+  matchFiltersWrap: {
+    marginBottom: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  matchFilterChip: {
+    minHeight: 34,
+    paddingHorizontal: 14,
+    borderRadius: ChapeTheme.radii.pill,
+    backgroundColor: "rgba(247, 245, 235, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 235, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  matchFilterChipActive: {
+    backgroundColor: "rgba(215, 240, 106, 0.18)",
+    borderColor: "rgba(215, 240, 106, 0.32)",
+  },
+  matchFilterChipText: {
+    color: ChapeTheme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  matchFilterChipTextActive: {
+    color: ChapeTheme.colors.text,
+  },
   matchCard: {
     padding: 18,
     borderRadius: ChapeTheme.radii.md,
@@ -660,10 +745,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   matchStatus: {
-    marginTop: 12,
+    marginTop: 10,
     color: ChapeTheme.colors.textMuted,
     fontSize: 14,
     fontWeight: "600",
+  },
+  matchCompetitionRow: {
+    marginTop: 12,
+  },
+  matchCompetitionText: {
+    color: ChapeTheme.colors.gold,
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   matchScoreRow: {
     marginTop: 16,
@@ -774,7 +869,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.06)",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
   },
   tableFilterValue: {
     flex: 1,
