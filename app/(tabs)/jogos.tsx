@@ -17,7 +17,7 @@ import { StateCard } from "@/components/state-card";
 import { ChapeTheme } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { getJogosOverview } from "@/services/jogos.service";
-import type { FeaturedMatch, JogosOverview, Standing, StandingForm } from "@/types/jogos";
+import type { FeaturedMatch, JogosOverview, RecentForm, Standing } from "@/types/jogos";
 
 const CHAPE_BADGE = require("../../assets/images/chape_simbolo.jpg");
 const USER_AVATAR = require("../../assets/images/personagem.png");
@@ -52,16 +52,6 @@ export default function JogosScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
-
-  function renderFormIcon(form: StandingForm) {
-    if (form === "up") {
-      return <MaterialIcons name="arrow-drop-up" size={20} color="#63d482" />;
-    }
-    if (form === "down") {
-      return <MaterialIcons name="arrow-drop-down" size={20} color="#ff8974" />;
-    }
-    return <MaterialIcons name="remove" size={16} color={ChapeTheme.colors.textSubtle} />;
   }
 
   function isChapeTeam(teamName: string) {
@@ -112,6 +102,8 @@ export default function JogosScreen() {
   const featuredMatches = data?.featuredMatches ?? [];
   const standings = data?.standings ?? [];
   const isCompact = width < 460;
+  const seasonLabel = data?.updatedAt ? new Date(data.updatedAt).getFullYear().toString() : "2026";
+  const leagueLabel = data?.competition ?? "Brasileirão Série A";
 
   const chapeStanding = standings.find((item) => isChapeTeam(item.team));
   const standingsSummary = [
@@ -263,26 +255,26 @@ export default function JogosScreen() {
 
               <AnimatedEnter delay={320} style={styles.sectionHeader}>
                 <Text style={styles.sectionEyebrow}>Tabela</Text>
-                <Text style={styles.sectionTitle}>Classificação resumida</Text>
+                <Text style={styles.sectionTitle}>Classificação</Text>
               </AnimatedEnter>
 
               <AnimatedEnter delay={360} style={styles.tableCard}>
+                <View style={styles.tableFiltersRow}>
+                  <TableFilter label="Liga" value={leagueLabel} />
+                  <TableFilter label="Temporada" value={seasonLabel} />
+                </View>
+
                 <View style={styles.tableHeaderRow}>
-                  <Text style={[styles.tableHeaderText, styles.colPosition]}>Pos</Text>
-                  <Text style={[styles.tableHeaderText, styles.colTeam]}>Equipe</Text>
-                  <Text style={[styles.tableHeaderText, styles.colTrend]}>F</Text>
-                  <Text style={[styles.tableHeaderText, styles.colPoints]}>P</Text>
-                  <Text style={[styles.tableHeaderText, styles.colGames]}>J</Text>
+                  <Text style={[styles.tableHeaderText, styles.colPosition]}>#</Text>
+                  <Text style={[styles.tableHeaderText, styles.colTeam]}>Clube</Text>
+                  <Text style={[styles.tableHeaderText, styles.colGoalsAgainst]}>GC</Text>
+                  <Text style={[styles.tableHeaderText, styles.colGoalDifference]}>SG</Text>
+                  <Text style={[styles.tableHeaderText, styles.colLastFive]}>Últimas 5</Text>
                 </View>
 
                 {standings.map((item) => (
-                  <StandingRow
-                    key={`${item.position}-${item.team}`}
-                    item={item}
-                    highlight={isChapeTeam(item.team)}
-                    trendIcon={renderFormIcon(item.form)}
-                    />
-                  ))}
+                  <StandingRow key={`${item.position}-${item.team}`} item={item} highlight={isChapeTeam(item.team)} />
+                ))}
               </AnimatedEnter>
             </>
           ) : null}
@@ -324,22 +316,110 @@ function TeamBadge({ source }: { source: ImageSourcePropType | null }) {
   return <Image source={source} style={styles.teamLogo} onError={() => setFailed(true)} />;
 }
 
+function TableFilter({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.tableFilter}>
+      <Text style={styles.tableFilterLabel}>{label}</Text>
+      <View style={styles.tableFilterValueRow}>
+        <Text numberOfLines={1} style={styles.tableFilterValue}>
+          {value}
+        </Text>
+        <MaterialIcons name="arrow-drop-down" size={18} color={ChapeTheme.colors.textMuted} />
+      </View>
+    </View>
+  );
+}
+
+function StandingCrest({ teamName, crest }: { teamName: string; crest?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const isChape = teamName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("chapecoense");
+
+  if ((!crest && !isChape) || failed) {
+    return (
+      <View style={styles.standingCrestFallback}>
+        <MaterialIcons name="shield" size={14} color={ChapeTheme.colors.textSubtle} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={isChape ? CHAPE_BADGE : { uri: crest }}
+      style={styles.standingCrest}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function StandingFormDot({ result }: { result: RecentForm }) {
+  const isWin = result === "W";
+  const isLoss = result === "L";
+  const iconName = isWin ? "check" : isLoss ? "close" : "remove";
+
+  return (
+    <View
+      style={[
+        styles.formDot,
+        isWin && styles.formDotWin,
+        isLoss && styles.formDotLoss,
+        result === "D" && styles.formDotDraw,
+      ]}
+    >
+      <MaterialIcons
+        name={iconName}
+        size={12}
+        color={isWin ? "#0f301c" : isLoss ? "#fff2ef" : "#f3f2f8"}
+      />
+    </View>
+  );
+}
+
+function getFormSlots(lastFive: RecentForm[]) {
+  const normalized = lastFive.slice(-5);
+
+  if (normalized.length >= 5) {
+    return normalized;
+  }
+
+  return [...Array<RecentForm | null>(5 - normalized.length).fill(null), ...normalized];
+}
+
 function StandingRow({
   item,
   highlight,
-  trendIcon,
 }: {
   item: Standing;
   highlight: boolean;
-  trendIcon: React.ReactNode;
 }) {
   return (
     <View style={[styles.tableRow, highlight && styles.tableRowHighlight]}>
       <Text style={[styles.tableCell, styles.colPosition]}>{item.position}</Text>
-      <Text style={[styles.tableCell, styles.colTeam, highlight && styles.teamHighlight]}>{item.team}</Text>
-      <View style={[styles.colTrend, styles.trendWrap]}>{trendIcon}</View>
-      <Text style={[styles.tableCell, styles.colPoints]}>{item.points}</Text>
-      <Text style={[styles.tableCell, styles.colGames]}>{item.games}</Text>
+      <View style={styles.colTeam}>
+        <View style={styles.teamCellWrap}>
+          <StandingCrest teamName={item.team} crest={item.crest} />
+          <View style={styles.teamCellTextWrap}>
+            <Text numberOfLines={1} style={[styles.tableCell, styles.teamCellText, highlight && styles.teamHighlight]}>
+              {item.team}
+            </Text>
+            <Text style={styles.teamCellMeta}>{item.points} pts</Text>
+          </View>
+        </View>
+      </View>
+      <Text style={[styles.tableCell, styles.colGoalsAgainst]}>{item.goalsAgainst}</Text>
+      <Text style={[styles.tableCell, styles.colGoalDifference]}>
+        {item.goalDifference > 0 ? `+${item.goalDifference}` : item.goalDifference}
+      </Text>
+      <View style={styles.colLastFive}>
+        <View style={styles.lastFiveWrap}>
+          {getFormSlots(item.lastFive).map((result, index) =>
+            result ? (
+              <StandingFormDot key={`${item.team}-${index}-${result}`} result={result} />
+            ) : (
+              <View key={`${item.team}-${index}-empty`} style={[styles.formDot, styles.formDotEmpty]} />
+            )
+          )}
+        </View>
+      </View>
     </View>
   );
 }
@@ -661,65 +741,156 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tableCard: {
-    padding: 16,
-    borderRadius: ChapeTheme.radii.lg,
-    backgroundColor: "rgba(247, 245, 235, 0.94)",
+    overflow: "hidden",
+    borderRadius: 22,
+    backgroundColor: "rgba(17, 18, 21, 0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
     ...ChapeTheme.shadow,
+  },
+  tableFiltersRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.06)",
+  },
+  tableFilter: {
+    flex: 1,
+    minWidth: 0,
+  },
+  tableFilterLabel: {
+    color: "rgba(255, 255, 255, 0.48)",
+    fontSize: 11,
+    marginBottom: 6,
+  },
+  tableFilterValueRow: {
+    minHeight: 36,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  tableFilterValue: {
+    flex: 1,
+    color: ChapeTheme.colors.text,
+    fontSize: 13,
+    fontWeight: "700",
   },
   tableHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingBottom: 10,
+    minHeight: 42,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(16, 32, 21, 0.08)",
+    borderBottomColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
   },
   tableHeaderText: {
-    color: "#738174",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
+    color: "rgba(255, 255, 255, 0.48)",
+    fontSize: 10,
+    fontWeight: "700",
   },
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 46,
+    minHeight: 58,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(16, 32, 21, 0.06)",
+    borderBottomColor: "rgba(255, 255, 255, 0.06)",
   },
   tableRowHighlight: {
-    backgroundColor: "rgba(20, 83, 45, 0.08)",
-    borderRadius: 12,
-    paddingHorizontal: 6,
+    backgroundColor: "rgba(94, 126, 255, 0.12)",
   },
   tableCell: {
-    color: "#102015",
+    color: ChapeTheme.colors.text,
     fontSize: 13,
     fontWeight: "600",
   },
   teamHighlight: {
-    color: ChapeTheme.colors.primaryBright,
+    color: "#f8fbff",
     fontWeight: "800",
   },
-  trendWrap: {
-    alignItems: "center",
-  },
   colPosition: {
-    width: 34,
+    width: 26,
     textAlign: "center",
   },
   colTeam: {
     flex: 1,
   },
-  colTrend: {
-    width: 32,
-  },
-  colPoints: {
+  colGoalsAgainst: {
     width: 34,
     textAlign: "center",
   },
-  colGames: {
-    width: 34,
+  colGoalDifference: {
+    width: 38,
     textAlign: "center",
+  },
+  colLastFive: {
+    width: 98,
+    alignItems: "flex-end",
+  },
+  teamCellWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  teamCellTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  teamCellText: {
+    fontSize: 14,
+  },
+  teamCellMeta: {
+    marginTop: 2,
+    color: "rgba(255, 255, 255, 0.42)",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  standingCrest: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  standingCrestFallback: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  },
+  lastFiveWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  formDot: {
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(195, 199, 208, 0.3)",
+  },
+  formDotWin: {
+    backgroundColor: "#5ad276",
+  },
+  formDotLoss: {
+    backgroundColor: "#ff554f",
+  },
+  formDotDraw: {
+    backgroundColor: "#8d8699",
+  },
+  formDotEmpty: {
+    backgroundColor: "rgba(195, 199, 208, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
   },
 });
